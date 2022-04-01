@@ -5,8 +5,9 @@ Created on Mon Mar 28 14:40:00 2022
 @author: Giorgio
 """
 
-import tensorflow as tf, tensorflow.math as m
+import tensorflow as tf, tensorflow.math as m, numpy as np, pandas as pd
 import math 
+from arch import arch_model
 pi = tf.constant(math.pi)
 
 def nll(sigma2, r):
@@ -33,4 +34,19 @@ def prepare_data_(rets, p=1, q=1, log_vola = True):
     prev_vola = np.array(vola_cols).transpose()
     data = np.concatenate((rets[p:rets.shape[0]].reshape(-1,1), prev_rets, prev_vola), 1)
     data = tf.convert_to_tensor(data, dtype = 'float32')
+    
     return tf.reshape(data[:,0], (data[:,0].shape[0],1)), data[:,1:]
+
+def rolling(days, x):
+    return tf.convert_to_tensor(pd.DataFrame(x[:,0]).rolling(days).mean().dropna().values.reshape(-1,1),
+                     dtype = 'float32')
+
+def forward_garch(rets_test, rets_train, fit):
+    mu, omega, alpha, beta = fit.params
+    eps = rets_test-mu
+    eps_0 = (rets_train[-1]-mu).numpy(); eps_0 = tf.convert_to_tensor(eps_0.reshape(-1,1), dtype = 'float32')
+    eps = tf.concat((eps_0, eps[:-1,:]),0)
+    sigma2 = [fit.conditional_volatility[-1]**2]
+    for t in range(rets_test.shape[0]):
+        sigma2.append((omega+alpha*eps[t]**2+beta*sigma2[-1]).numpy()[0])
+    return tf.expand_dims(tf.convert_to_tensor(sigma2[1:], dtype = 'float32')**.5,1)
