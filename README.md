@@ -30,3 +30,4 @@ Index  | NLL (test set)
 ^GSPC  | 2019 < garch
 ^SP100 | 2055 = garch
 ^DJI (lag  = 10) | 2036 < garch
+^FTSE | 2129 < garch
