@@ -29,3 +29,4 @@ Index  | NLL (test set)
 ^SSMI  | 1975 < garch
 ^GSPC  | 2019 < garch
 ^SP100 | 2055 = garch
+^DJI (lag  = 10) | 2036 < garch
