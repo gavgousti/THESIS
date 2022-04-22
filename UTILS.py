@@ -7,6 +7,7 @@ Created on Mon Mar 28 14:40:00 2022
 
 import tensorflow as tf, tensorflow.math as m, numpy as np, pandas as pd
 import math 
+from tensorflow.keras.utils import timeseries_dataset_from_array as loader
 from arch import arch_model
 pi = tf.constant(math.pi)
 
@@ -50,3 +51,46 @@ def forward_garch(rets_test, rets_train, fit):
     for t in range(rets_test.shape[0]):
         sigma2.append((omega+alpha*eps[t]**2+beta*sigma2[-1]).numpy()[0])
     return tf.expand_dims(tf.convert_to_tensor(sigma2[1:], dtype = 'float32')**.5,1)
+
+def nll_gb_exp(y_hat, data):
+    #y_hat = log(sigma**2)
+    y = data.get_label()
+    grad = .5*(np.ones_like(y) - y**2*np.exp(-1*y_hat))
+    hess = .5*(y**2*np.exp(-1*y_hat))
+    return grad, hess
+
+def nll_gb_exp_eval(y_hat, data):
+    y = data.get_label()
+    return 'NLL', .5*np.sum(np.log(2*np.pi)+y_hat+y**2*np.exp(-1*y_hat)), False
+
+
+def take_X_y(rets, lag, take_rv, reshape, **kwargs):
+    if not take_rv:
+        rets = rets.values-rets.mean()
+        load = loader(
+            data = rets, 
+            targets = rets[lag:],
+            sequence_length = lag,
+            batch_size = rets.shape[0]
+        )
+        for X, y in load:
+            return  X.numpy().astype('float32'), y.numpy().reshape(-1,1).astype('float32')
+    else:
+        rets = rets-rets.mean()
+        rv = rets.rolling(22).std().dropna().values.reshape(-1,1)
+        if kwargs['log_rv']:
+            rv = np.log(rv)
+            print('log-realized volatility used as additional feature!')
+        rets = rets.iloc[21:].values.reshape(-1,1)
+        data_aug = np.concatenate((rets, rv), 1)
+        load = loader(
+            data = data_aug,
+            targets = rets[lag:],
+            sequence_length = lag,
+            batch_size = data_aug.shape[0]
+        )
+        for X, y in load:
+            X, y = X.numpy().astype('float32'), y.numpy().astype('float32')
+        if reshape:
+            X = np.reshape(X, (X.shape[0], X.shape[1]*X.shape[2]))
+        return X, y
