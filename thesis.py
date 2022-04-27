@@ -5,14 +5,19 @@ Created on Mon Mar 28 14:36:51 2022
 @author: Giorgio
 """
 
-import tensorflow as tf
 from tensorflow import keras
 from keras.layers import SimpleRNN, Dense, Dropout, BatchNormalization, LSTM
-import matplotlib.pyplot as plt
-from tqdm.auto import tqdm
+from tqdm import tqdm
 import matplotlib as mpl
-from UTILS import nll
+import numpy as np, tensorflow as tf
+import matplotlib.pyplot as plt
+import yfinance as yf
+from UTILS import train_test_split_ts, forward_garch, nll_gb_exp, nll_gb_exp_eval, take_X_y,nll
 
+import pyfiglet
+from sklearn.metrics import mean_squared_error as mse
+import lightgbm as lgb
+from arch import arch_model
 
 mpl.rcParams['figure.figsize'] = (18,8)
 plt.style.use('ggplot')
@@ -154,3 +159,314 @@ class RNN(keras.Model):
         plt.legend()
         plt.title('NLL')
         plt.show() 
+
+def deployment_RNN_1d(
+        lstm = False,
+        index = '^GSPC',
+        start_date = '2000-01-01',
+        lag = 20,
+        include_rv = True
+        ):
+    """
+    # TBA
+
+    Parameters
+    ----------
+    lstm : TYPE, optional
+        DESCRIPTION. The default is False.
+    index : TYPE, optional
+        DESCRIPTION. The default is '^GSPC'.
+    start_date : TYPE, optional
+        DESCRIPTION. The default is '2000-01-01'.
+    lag : TYPE, optional
+        DESCRIPTION. The default is 20.
+    include_rv : TYPE, optional
+        DESCRIPTION. The default is True.
+     : TYPE
+        DESCRIPTION.
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    prices = yf.Ticker(index).history(start = start_date).Close
+    rets = 100*(prices.pct_change().dropna())
+    rets_train, rets_test = train_test_split_ts(rets, .7)
+    X_train, y_train = take_X_y(rets_train, lag, reshape = False, take_rv = include_rv, log_rv =include_rv )
+    X_test, y_test = take_X_y(rets_test, lag, reshape = False, take_rv = include_rv, log_rv =include_rv)
+    
+    X_train, y_train = tf.convert_to_tensor(X_train, dtype  = 'float32'),\
+                            tf.convert_to_tensor(y_train, dtype  = 'float32') 
+    
+    X_test, y_test = tf.convert_to_tensor(X_test, dtype  = 'float32'),\
+                            tf.convert_to_tensor(y_test, dtype  = 'float32') 
+    
+    model = RNN(
+        lstm = lstm,
+        hidden_size = [60],
+        hidden_activation = 'tanh',
+        last_activation = 'exponential',
+        dropout = 0.0,
+        l1 = 5,
+        l2 = 0
+    )
+    
+    model.train(
+        X_train, 
+        y_train,
+        X_test,
+        y_test,
+        epochs = 10,
+        bs = 2048,
+        lr = .008
+    )
+    
+    model.plot_loss()
+    
+    print(model.summary())
+    
+    print(60*'*')
+    print(pyfiglet.figlet_format("             MODEL\nEVALUATION"))
+    print(60*'*')
+    
+    out = model(X_train)
+    plt.plot(out)
+    plt.title(model.NAME)
+    plt.show()
+    
+    print('\n\nPerformance on the Train Set:\n'+30*'-'+'\n')
+    print('RNN NLL: {:6.0f}'.format(nll(out**2, y_train)))
+    
+    garch = arch_model(y_train, mean = 'Constant', vol = 'GARCH', p=1, q=1)
+    fit = garch.fit(disp = False)
+    g_vol = fit.conditional_volatility
+    
+    plt.plot(g_vol)
+    plt.title('GARCH')
+    plt.show()
+    print('Garch NLL: {:6.0f}'.format(nll(tf.convert_to_tensor(g_vol.reshape(-1,1), dtype = 'float32')**2,
+                                          y_train)))
+    
+    out_test = model(X_test) 
+    plt.plot(out_test, label = 'Model Conditional Volatility')
+    plt.plot(np.exp(X_test[:,-1,1]), label = 'Realized Volatility', alpha = .6)
+    plt.title(model.NAME+' Test')
+    plt.legend()
+    plt.show()
+    
+    print('\n\nPerformance on the Test Set:\n'+30*'-'+'\n')
+    print('RNN NLL: {:6.0f}'.format(nll(out_test**2, y_test)))
+    print('RNN RMSE: {:1.3f}'.format(mse(np.exp(X_test[:,-1,1]), out_test.numpy().ravel())**.5))
+    
+    
+    g_vola_pred = forward_garch(y_test, y_train, fit)
+    plt.plot(g_vola_pred, label = 'Garch Conditional Volatility')
+    plt.plot(np.exp(X_test[:,-1,1]), label = 'Realized Volatility', alpha = .6)
+    plt.title('GARCH Test')
+    plt.legend()
+    plt.show()
+    print('Garch NLL: {:6.0f}'.format(nll(g_vola_pred**2, y_test)))
+    print('Garch RMSE: {:1.3f}'.format(mse(np.exp(X_test[:,-1,1]), g_vola_pred.numpy().ravel())**.5))
+
+def deployment_DNN_1d(
+        index = '^GSPC',
+        start_date = '2000-01-01',
+        lag = 20,
+        include_rv = True
+        ):
+    """
+    
+
+    Parameters
+    ----------
+    index : TYPE, optional
+        DESCRIPTION. The default is '^GSPC'.
+    start_date : TYPE, optional
+        DESCRIPTION. The default is '2000-01-01'.
+    lag : TYPE, optional
+        DESCRIPTION. The default is 20.
+    include_rv : TYPE, optional
+        DESCRIPTION. The default is True.
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    prices = yf.Ticker(index).history(start = start_date).Close
+    rets = 100*(prices.pct_change().dropna())
+    rets_train, rets_test = train_test_split_ts(rets, .7)
+    X_train, y_train = take_X_y(rets_train, lag, reshape = True, take_rv = include_rv, log_rv =include_rv )
+    X_test, y_test = take_X_y(rets_test, lag, reshape = True, take_rv = include_rv, log_rv =include_rv)
+    
+    X_train, y_train = tf.convert_to_tensor(X_train, dtype  = 'float32'),\
+                            tf.convert_to_tensor(y_train, dtype  = 'float32') 
+    
+    X_test, y_test = tf.convert_to_tensor(X_test, dtype  = 'float32'),\
+                            tf.convert_to_tensor(y_test, dtype  = 'float32') 
+    
+    model = DNN(
+        hidden_size = [300],
+        dropout = .5,
+        l1 = 1,
+        l2 = 1
+    )
+    
+    model.train(
+        X_train, 
+        y_train,
+        X_test,
+        y_test,
+        epochs = 20,
+        bs = 1024,
+        lr = .001
+    )
+    
+    model.plot_loss()
+    
+    model.summary()
+    
+    print(60*'*')
+    print(pyfiglet.figlet_format("             MODEL\nEVALUATION"))
+    print(60*'*')
+    
+    out = model(X_train)
+    plt.plot(out)
+    plt.title('Dense Neural Network')
+    plt.show()
+    
+    print('\n\nPerformance on the Train Set:\n'+30*'-'+'\n')
+    print('DNN NLL: {:6.0f}'.format(nll(out**2, y_train)))
+    
+    garch = arch_model(y_train, mean = 'Constant', vol = 'GARCH', p=1, q=1)
+    fit = garch.fit(disp = False)
+    g_vol = fit.conditional_volatility
+    
+    plt.plot(g_vol)
+    plt.title('GARCH')
+    plt.show()
+    print('Garch NLL: {:6.0f}'.format(nll(tf.convert_to_tensor(g_vol.reshape(-1,1), dtype = 'float32')**2,
+                                          y_train)))
+    
+    out_test = model(X_test) 
+    plt.plot(out_test)
+    plt.plot(np.exp(X_test[:,-1]), alpha = .6, label = 'Realized Volatility')
+    plt.title('Dense Neural Network Test')
+    plt.show()
+    
+    print('\n\nPerformance on the Test Set:\n'+30*'-'+'\n')
+    print('DNN NLL: {:6.0f}'.format(nll(out_test**2, y_test)))
+    print('DNN RMSE: {:1.3f}'.format(mse(np.exp(X_test[:,-1]), out_test.numpy().ravel())**.5))
+    
+    
+    g_vola_pred = forward_garch(y_test, y_train, fit)
+    plt.plot(g_vola_pred)
+    plt.plot(np.exp(X_test[:,-1]), alpha = .6, label = 'Realized Volatility')
+    plt.title('GARCH Test')
+    plt.show()
+    print('Garch NLL: {:6.0f}'.format(nll(g_vola_pred**2, y_test)))
+    print('GARCH RMSE: {:1.3f}'.format(mse(np.exp(X_test[:,-1]),g_vola_pred)**.5))
+        
+def deployment_GB_1d(
+        index = '^GSPC',
+        start_date = '2000-01-01',
+        lag = 20,
+        include_rv = True
+        ):
+    """
+    TBA
+
+    Parameters
+    ----------
+    index : TYPE, optional
+        DESCRIPTION. The default is '^GSPC'.
+    start_date : TYPE, optional
+        DESCRIPTION. The default is '2000-01-01'.
+    lag : TYPE, optional
+        DESCRIPTION. The default is 20.
+    include_rv : TYPE, optional
+        DESCRIPTION. The default is True.
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    prices = yf.Ticker(index).history(start = start_date).Close
+    rets = 100*(prices.pct_change().dropna())
+    rets_train, rets_test = train_test_split_ts(rets, .7)
+    
+    X_train, y_train = take_X_y(rets_train, lag, take_rv = include_rv, log_rv =include_rv, reshape = True )
+    X_test, y_test = take_X_y(rets_test, lag, take_rv = include_rv, log_rv =include_rv, reshape = True)
+    lgb_train, lgb_test = lgb.Dataset(X_train, y_train, free_raw_data=False ),\
+    lgb.Dataset(X_test, y_test,  free_raw_data=False )
+    
+    lgbm_params = {
+        'max_depth':1,
+        'learning_rate' : .2,
+        'boosting':'gbdt',
+        'num_iterations':200,
+        'force_col_wise ':'true',
+        'early_stopping_round':10,
+        'tree_learner': 'serial' ,
+        'bagging_fraction': 1,
+        'feature_fraction': 1,
+        'extra_trees':'true'
+    }
+    
+    model = lgb.train(
+        params = lgbm_params,
+        train_set = lgb_train,
+        valid_sets = lgb_test,
+        fobj  = nll_gb_exp,
+        feval = nll_gb_exp_eval,
+        verbose_eval = False
+    )
+    
+    print(60*'*')
+    print(pyfiglet.figlet_format("             MODEL\nEVALUATION"))
+    print(60*'*')
+    
+    out = model.predict(X_train)
+    plt.plot(np.exp(out)**.5)
+    plt.title('Gradient Boosting')
+    plt.show()
+    
+    print('\n\nPerformance on the Train Set:\n'+30*'-'+'\n')
+
+    print('GB NLL: {:6.0f}'.format(nll_gb_exp_eval(out, lgb_train)[1]))
+    
+    garch = arch_model(lgb_train.get_label(), mean = 'Constant', vol = 'GARCH', p=1, q=1)
+    fit = garch.fit(disp = False)
+    g_vol = fit.conditional_volatility
+    
+    plt.plot(g_vol)
+    plt.title('GARCH')
+    plt.show()
+    print('Garch NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vol**2), lgb_train)[1]))
+    print()
+    
+    plt.plot(np.exp(model.predict(X_test))**.5)
+    plt.plot(np.exp(X_test[:,-1]), alpha = .6, label = 'Realized Volatilty')
+    plt.title('Gradient Boosting Test')
+    plt.show()
+    print('\n\nPerformance on the Test Set:\n'+30*'-'+'\n')
+
+    print('GB NLL: {:6.0f}'.format(nll_gb_exp_eval(model.predict(X_test), lgb_test)[1]))
+    print('GB RMSE: {:1.3f}'.format(mse(np.exp(model.predict(X_test))**.5, np.exp(X_test[:,-1]))**.5))
+    
+    
+    g_vola_pred = forward_garch(tf.convert_to_tensor(y_test), tf.convert_to_tensor(y_train), fit).numpy().ravel()
+    plt.plot(g_vola_pred)
+    plt.plot( np.exp(X_test[:,-1]), alpha = .6, label = 'Realized Volatilty')
+    plt.title('GARCH Test')
+    plt.show()
+    print('Garch NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vola_pred**2), lgb_test)[1]))
+    print('Garch RMSE: {:1.3f}'.format(mse(g_vola_pred, np.exp(X_test[:,-1]))**.5))
+    
+
+#end
