@@ -165,7 +165,8 @@ def deployment_RNN_1d(
         index = '^GSPC',
         start_date = '2000-01-01',
         lag = 20,
-        include_rv = True
+        include_rv = True,
+        save = None
         ):
     """
     # TBA
@@ -249,32 +250,51 @@ def deployment_RNN_1d(
     print('Garch NLL: {:6.0f}'.format(nll(tf.convert_to_tensor(g_vol.reshape(-1,1), dtype = 'float32')**2,
                                           y_train)))
     
-    out_test = model(X_test) 
-    plt.plot(out_test, label = 'Model Conditional Volatility')
-    plt.plot(np.exp(X_test[:,-1,1]), label = 'Realized Volatility', alpha = .6)
-    plt.title(model.NAME+' Test')
-    plt.legend()
-    plt.show()
-    
     print('\n\nPerformance on the Test Set:\n'+30*'-'+'\n')
+
+    out_test = model(X_test) 
+    plt.plot(np.exp(X_test[:,-1,1]), label = 'Realized Volatility', alpha = 1)
+    plt.title(model.NAME+' Out of Sample '+ index)
+    
+    if save!=None:
+        if lstm:
+            txt = 'LSTM'
+
+        else:
+            txt = 'RNN'
+        plt.plot(out_test, label = txt)
+        plt.legend()
+        plt.savefig(save+'\\'+txt+'__'+index+'.png')
+        plt.show()
+
+        
+    
     print('RNN NLL: {:6.0f}'.format(nll(out_test**2, y_test)))
     print('RNN RMSE: {:1.3f}'.format(mse(np.exp(X_test[:,-1,1]), out_test.numpy().ravel())**.5))
     
     
     g_vola_pred = forward_garch(y_test, y_train, fit)
-    plt.plot(g_vola_pred, label = 'Garch Conditional Volatility')
-    plt.plot(np.exp(X_test[:,-1,1]), label = 'Realized Volatility', alpha = .6)
-    plt.title('GARCH Test')
+    plt.plot(g_vola_pred, label = 'GARCH')
+    plt.plot(np.exp(X_test[:,-1,1]), label = 'Realized Volatility', alpha = 1)
+    plt.title('GARCH Out of Sample '+ index)
     plt.legend()
     plt.show()
+    # if save!=None:
+    #     plt.savefig(save+'\\GARCH__'+index+'.png')
+        
     print('Garch NLL: {:6.0f}'.format(nll(g_vola_pred**2, y_test)))
     print('Garch RMSE: {:1.3f}'.format(mse(np.exp(X_test[:,-1,1]), g_vola_pred.numpy().ravel())**.5))
+    return {'name': txt+'__'+index,
+            'NLL': nll(out_test**2, y_test), 
+            'RMSE': mse(np.exp(X_test[:,-1,1]), out_test.numpy().ravel())**.5}
+
 
 def deployment_DNN_1d(
         index = '^GSPC',
         start_date = '2000-01-01',
         lag = 20,
-        include_rv = True
+        include_rv = True,
+        save = None
         ):
     """
     
@@ -322,7 +342,7 @@ def deployment_DNN_1d(
         y_test,
         epochs = 20,
         bs = 1024,
-        lr = .001
+        lr = .001,
     )
     
     model.plot_loss()
@@ -335,7 +355,7 @@ def deployment_DNN_1d(
     
     out = model(X_train)
     plt.plot(out)
-    plt.title('Dense Neural Network')
+    plt.title('Feed-forward Neural Network')
     plt.show()
     
     print('\n\nPerformance on the Train Set:\n'+30*'-'+'\n')
@@ -351,30 +371,44 @@ def deployment_DNN_1d(
     print('Garch NLL: {:6.0f}'.format(nll(tf.convert_to_tensor(g_vol.reshape(-1,1), dtype = 'float32')**2,
                                           y_train)))
     
-    out_test = model(X_test) 
-    plt.plot(out_test)
-    plt.plot(np.exp(X_test[:,-1]), alpha = .6, label = 'Realized Volatility')
-    plt.title('Dense Neural Network Test')
-    plt.show()
-    
     print('\n\nPerformance on the Test Set:\n'+30*'-'+'\n')
+
+    out_test = model(X_test) 
+    plt.plot(out_test, label = 'FNN')
+    plt.plot(np.exp(X_test[:,-1]), alpha = 1, label = 'Realized Volatility')
+    plt.title('Feed-forward Neural Network Out of Sample '+ index)
+    plt.legend()
+    if save!=None:
+        plt.savefig(save+'\\FNN__'+index+'.png')
+        plt.show()
+
+    
     print('DNN NLL: {:6.0f}'.format(nll(out_test**2, y_test)))
     print('DNN RMSE: {:1.3f}'.format(mse(np.exp(X_test[:,-1]), out_test.numpy().ravel())**.5))
     
     
     g_vola_pred = forward_garch(y_test, y_train, fit)
-    plt.plot(g_vola_pred)
-    plt.plot(np.exp(X_test[:,-1]), alpha = .6, label = 'Realized Volatility')
-    plt.title('GARCH Test')
+    plt.plot(g_vola_pred, label = 'GARCH')
+    plt.plot(np.exp(X_test[:,-1]), alpha = 1, label = 'Realized Volatility')
+    plt.title('GARCH Out of Sample '+ index)
+    plt.legend()
     plt.show()
+    # if save!=None:
+    #     plt.savefig(save+'\\GARCH__'+index+'.png')
+
     print('Garch NLL: {:6.0f}'.format(nll(g_vola_pred**2, y_test)))
     print('GARCH RMSE: {:1.3f}'.format(mse(np.exp(X_test[:,-1]),g_vola_pred)**.5))
+    
+    return {'name': 'FNN__'+index,
+            'NLL': nll(out_test**2, y_test),
+            'RMSE': mse(np.exp(X_test[:,-1]), out_test.numpy().ravel())**.5}
         
 def deployment_GB_1d(
         index = '^GSPC',
         start_date = '2000-01-01',
         lag = 20,
-        include_rv = True
+        include_rv = True,
+        save = None
         ):
     """
     TBA
@@ -448,25 +482,74 @@ def deployment_GB_1d(
     plt.title('GARCH')
     plt.show()
     print('Garch NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vol**2), lgb_train)[1]))
-    print()
     
-    plt.plot(np.exp(model.predict(X_test))**.5)
-    plt.plot(np.exp(X_test[:,-1]), alpha = .6, label = 'Realized Volatilty')
-    plt.title('Gradient Boosting Test')
-    plt.show()
     print('\n\nPerformance on the Test Set:\n'+30*'-'+'\n')
+    plt.plot(np.exp(model.predict(X_test))**.5, label = 'GB')
+    plt.plot(np.exp(X_test[:,-1]), alpha = 1, label = 'Realized Volatilty')
+    plt.title('Gradient Boosting Out of Sample '+ index)
+    plt.legend()
+    if save!=None:
+        plt.savefig(save+'\\GB__'+index+'.png')
+    plt.show()
+
 
     print('GB NLL: {:6.0f}'.format(nll_gb_exp_eval(model.predict(X_test), lgb_test)[1]))
     print('GB RMSE: {:1.3f}'.format(mse(np.exp(model.predict(X_test))**.5, np.exp(X_test[:,-1]))**.5))
     
     
     g_vola_pred = forward_garch(tf.convert_to_tensor(y_test), tf.convert_to_tensor(y_train), fit).numpy().ravel()
-    plt.plot(g_vola_pred)
-    plt.plot( np.exp(X_test[:,-1]), alpha = .6, label = 'Realized Volatilty')
-    plt.title('GARCH Test')
-    plt.show()
+    plt.plot(g_vola_pred, label = 'GARCH')
+    plt.plot( np.exp(X_test[:,-1]), alpha = 1, label = 'Realized Volatilty')
+    plt.legend()
+    plt.title('GARCH Out of Sample '+ index)
+    if save!=None:
+        plt.savefig(save+'\\GARCH__'+index+'.png')
+        plt.show()
+
+
     print('Garch NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vola_pred**2), lgb_test)[1]))
     print('Garch RMSE: {:1.3f}'.format(mse(g_vola_pred, np.exp(X_test[:,-1]))**.5))
     
+    return {'name': 'GB__'+index,
+            'NLL': nll_gb_exp_eval(model.predict(X_test), lgb_test)[1],
+            'RMSE': mse(np.exp(model.predict(X_test))**.5, np.exp(X_test[:,-1]))**.5,
+            'GARCH NLL': nll_gb_exp_eval(np.log(g_vola_pred**2), lgb_test)[1],
+            'GARCH RMSE': mse(g_vola_pred, np.exp(X_test[:,-1]))**.5
+            }
 
-#end
+    
+
+#end\
+    
+def output1():
+    """
+    Generation of results and figures for the One-dimensional case.
+    
+    List of Tickers used: ['^GSPC', '^DJI', '^IXIC', '^RUT', '^SSMI', '^OEX', '^N225', '^FTSE']
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    output_file = r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Figures\1d'
+    tickers = ['^GSPC', '^DJI', '^IXIC', '^RUT', '^SSMI', '^OEX', '^N225', '^FTSE']
+    nll_results = []
+    rmse_results = []
+    
+    for t in tqdm(tickers):
+        nll = []
+        rmse = []
+        print(t)
+        gb = deployment_GB_1d(index = t, save = output_file)
+        rnn = deployment_RNN_1d(lstm = False, index = t, save = output_file)
+        lstm = deployment_RNN_1d(lstm = True, index = t, save = output_file)
+        fnn = deployment_DNN_1d(index = t, save = output_file)
+        nll.append([t, rnn['NLL'], lstm['NLL'], fnn['NLL'], gb['NLL'], gb['GARCH NLL']])
+        rmse.append([t, rnn['RMSE'], lstm['RMSE'], fnn['RMSE'], gb['RMSE'], gb['GARCH RMSE']])
+        nll_results.append(nll)
+        rmse_results.append(rmse)
+
+    return nll_results, rmse_results
+    
