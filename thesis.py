@@ -12,7 +12,8 @@ import matplotlib as mpl
 import numpy as np, tensorflow as tf
 import matplotlib.pyplot as plt
 import yfinance as yf
-from UTILS import train_test_split_ts, forward_garch, nll_gb_exp, nll_gb_exp_eval, take_X_y,nll
+from UTILS import train_test_split_ts, forward_garch, nll_gb_exp,\
+ nll_gb_exp_eval, take_X_y,nll, forward_gjr, forward_egarch
 
 import pyfiglet
 from sklearn.metrics import mean_squared_error as mse
@@ -480,6 +481,10 @@ def deployment_GB_1d(
 
     print('GB NLL: {:6.0f}'.format(nll_gb_exp_eval(out, lgb_train)[1]))
     
+# =============================================================================
+#     GARCH
+# =============================================================================
+    
     garch = arch_model(lgb_train.get_label(), mean = 'Constant', vol = 'GARCH', p=1, q=1)
     fit = garch.fit(disp = False)
     g_vol = fit.conditional_volatility
@@ -489,8 +494,31 @@ def deployment_GB_1d(
     plt.show()
     print('Garch NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vol**2), lgb_train)[1]))
     
-    #TODO: add egarch and gjr 
+# =============================================================================
+#     GJR
+# =============================================================================
+    gjr = arch_model(lgb_train.get_label(), mean = 'Constant', vol = 'GARCH', p=1, q=1, o=1)
+    fit_gjr = gjr.fit(disp = False)
+    g_vol_gjr= fit_gjr.conditional_volatility
     
+    plt.plot(g_vol_gjr)
+    plt.title('GJR')
+    plt.show()
+    print('Gjr  NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vol_gjr**2), lgb_train)[1]))
+    
+# =============================================================================
+#     EGARCH
+# =============================================================================
+    egarch = arch_model(lgb_train.get_label(), mean = 'Constant', vol = 'EGARCH', p=1, q=1, o=1)
+    fit_egarch = egarch.fit(disp = False)
+    g_vol_egarch = fit_egarch.conditional_volatility
+    
+    plt.plot(g_vol_egarch)
+    plt.title('EGARCH')
+    plt.show()
+    print('Egarch NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vol_egarch**2), lgb_train)[1]))
+
+
     print('\n\nPerformance on the Test Set:\n'+30*'-'+'\n')
     plt.plot(np.exp(model.predict(X_test))**.5, label = 'GB')
     plt.plot(np.exp(X_test[:,-1]), alpha = 1, label = 'Realized Volatilty')
@@ -504,6 +532,9 @@ def deployment_GB_1d(
     print('GB NLL: {:6.0f}'.format(nll_gb_exp_eval(model.predict(X_test), lgb_test)[1]))
     print('GB RMSE: {:1.3f}'.format(mse(np.exp(model.predict(X_test))**.5, np.exp(X_test[:,-1]))**.5))
     
+# =============================================================================
+#     GARCH
+# =============================================================================
     
     g_vola_pred = forward_garch(tf.convert_to_tensor(y_test), tf.convert_to_tensor(y_train), fit).numpy().ravel()
     plt.plot(g_vola_pred, label = 'GARCH')
@@ -518,14 +549,49 @@ def deployment_GB_1d(
     print('Garch NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vola_pred**2), lgb_test)[1]))
     print('Garch RMSE: {:1.3f}'.format(mse(g_vola_pred, np.exp(X_test[:,-1]))**.5))
     
-    #TODO: add egarch and gjr
+# =============================================================================
+#     GJR
+# =============================================================================
+    
+    g_vola_pred_gjr = forward_gjr(tf.convert_to_tensor(y_test), tf.convert_to_tensor(y_train), fit_gjr).numpy().ravel()
+    plt.plot(g_vola_pred_gjr, label = 'GJR')
+    plt.plot(np.exp(X_test[:,-1]), alpha = 1, label = 'Realized Volatilty')
+    plt.legend()
+    plt.title('GJR Out of Sample '+ index)
+    if save!=None:
+        plt.savefig(save+'\\GJR__'+index+'.png')
+        plt.show()
+
+
+    print('Gjr NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vola_pred_gjr**2), lgb_test)[1]))
+    print('Gjr RMSE: {:1.3f}'.format(mse(g_vola_pred_gjr, np.exp(X_test[:,-1]))**.5))
+    
+# =============================================================================
+#     EGARCH
+# =============================================================================
+    
+    g_vola_pred_egarch = forward_egarch(tf.convert_to_tensor(y_test), tf.convert_to_tensor(y_train), fit_egarch).numpy().ravel()
+    plt.plot(g_vola_pred_egarch, label = 'EGARCH')
+    plt.plot(np.exp(X_test[:,-1]), alpha = 1, label = 'Realized Volatilty')
+    plt.legend()
+    plt.title('EGARCH Out of Sample '+ index)
+    if save!=None:
+        plt.savefig(save+'\\EGARCH__'+index+'.png')
+        plt.show()
+
+
+    print('Egarch NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vola_pred_egarch**2), lgb_test)[1]))
+    print('Egarch RMSE: {:1.3f}'.format(mse(g_vola_pred_egarch, np.exp(X_test[:,-1]))**.5))
     
     return {'name': 'GB__'+index,
             'NLL': nll_gb_exp_eval(model.predict(X_test), lgb_test)[1],
             'RMSE': mse(np.exp(model.predict(X_test))**.5, np.exp(X_test[:,-1]))**.5,
             'GARCH NLL': nll_gb_exp_eval(np.log(g_vola_pred**2), lgb_test)[1],
-            'GARCH RMSE': mse(g_vola_pred, np.exp(X_test[:,-1]))**.5
-            #TODO: add egarch and gjr
+            'GARCH RMSE': mse(g_vola_pred, np.exp(X_test[:,-1]))**.5,
+            'GJR NLL': nll_gb_exp_eval(np.log(g_vola_pred_gjr**2), lgb_test)[1],
+            'GJR RMSE': mse(g_vola_pred_gjr, np.exp(X_test[:,-1]))**.5,
+            'EGARCH NLL': nll_gb_exp_eval(np.log(g_vola_pred_egarch**2), lgb_test)[1],
+            'EGARCH RMSE': mse(g_vola_pred_egarch, np.exp(X_test[:,-1]))**.5
             }
 
     
@@ -556,10 +622,12 @@ def output1(output_file =  r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Fi
         rnn = deployment_RNN_1d(lstm = False, index = t, save = output_file)
         lstm = deployment_RNN_1d(lstm = True, index = t, save = output_file)
         fnn = deployment_DNN_1d(index = t, save = output_file)
-        nll.append([t, rnn['NLL'].numpy()[0], lstm['NLL'].numpy()[0],
-                    fnn['NLL'].numpy()[0], gb['NLL'], gb['GARCH NLL']])
+        nll.append([t, rnn['NLL'].numpy(), lstm['NLL'].numpy(),
+                    fnn['NLL'].numpy(), gb['NLL'], gb['GARCH NLL'],
+                    gb['GJR NLL'], gb['EGARCH NLL']])
         rmse.append([t, rnn['RMSE'], lstm['RMSE'], fnn['RMSE'],
-                     gb['RMSE'], gb['GARCH RMSE']])
+                     gb['RMSE'], gb['GARCH RMSE'],
+                     gb['GJR RMSE'], gb['EGARCH RMSE']])
         nll_results.append(nll)
         rmse_results.append(rmse)
 
