@@ -256,16 +256,22 @@ def deployment_RNN_1d(
     plt.plot(np.exp(X_test[:,-1,1]), label = 'Realized Volatility', alpha = 1)
     plt.title(model.NAME+' Out of Sample '+ index)
     
-    if save!=None:
-        if lstm:
-            txt = 'LSTM'
+    if lstm:
+        txt = 'LSTM'
 
-        else:
-            txt = 'RNN'
+    else:
+        txt = 'RNN'
+        
+    if save!=None:
         plt.plot(out_test, label = txt)
         plt.legend()
         plt.savefig(save+'\\'+txt+'__'+index+'.png')
         plt.show()
+    else:
+        plt.plot(out_test, label = txt)
+        plt.legend()
+        plt.show()
+        
 
         
     
@@ -483,6 +489,8 @@ def deployment_GB_1d(
     plt.show()
     print('Garch NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vol**2), lgb_train)[1]))
     
+    #TODO: add egarch and gjr 
+    
     print('\n\nPerformance on the Test Set:\n'+30*'-'+'\n')
     plt.plot(np.exp(model.predict(X_test))**.5, label = 'GB')
     plt.plot(np.exp(X_test[:,-1]), alpha = 1, label = 'Realized Volatilty')
@@ -510,18 +518,21 @@ def deployment_GB_1d(
     print('Garch NLL: {:6.0f}'.format(nll_gb_exp_eval(np.log(g_vola_pred**2), lgb_test)[1]))
     print('Garch RMSE: {:1.3f}'.format(mse(g_vola_pred, np.exp(X_test[:,-1]))**.5))
     
+    #TODO: add egarch and gjr
+    
     return {'name': 'GB__'+index,
             'NLL': nll_gb_exp_eval(model.predict(X_test), lgb_test)[1],
             'RMSE': mse(np.exp(model.predict(X_test))**.5, np.exp(X_test[:,-1]))**.5,
             'GARCH NLL': nll_gb_exp_eval(np.log(g_vola_pred**2), lgb_test)[1],
             'GARCH RMSE': mse(g_vola_pred, np.exp(X_test[:,-1]))**.5
+            #TODO: add egarch and gjr
             }
 
     
 
 #end\
     
-def output1():
+def output1(output_file =  r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Figures\1d'):
     """
     Generation of results and figures for the One-dimensional case.
     
@@ -533,7 +544,6 @@ def output1():
 
     """
     
-    output_file = r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Figures\1d'
     tickers = ['^GSPC', '^DJI', '^IXIC', '^RUT', '^SSMI', '^OEX', '^N225', '^FTSE']
     nll_results = []
     rmse_results = []
@@ -546,8 +556,10 @@ def output1():
         rnn = deployment_RNN_1d(lstm = False, index = t, save = output_file)
         lstm = deployment_RNN_1d(lstm = True, index = t, save = output_file)
         fnn = deployment_DNN_1d(index = t, save = output_file)
-        nll.append([t, rnn['NLL'], lstm['NLL'], fnn['NLL'], gb['NLL'], gb['GARCH NLL']])
-        rmse.append([t, rnn['RMSE'], lstm['RMSE'], fnn['RMSE'], gb['RMSE'], gb['GARCH RMSE']])
+        nll.append([t, rnn['NLL'].numpy()[0], lstm['NLL'].numpy()[0],
+                    fnn['NLL'].numpy()[0], gb['NLL'], gb['GARCH NLL']])
+        rmse.append([t, rnn['RMSE'], lstm['RMSE'], fnn['RMSE'],
+                     gb['RMSE'], gb['GARCH RMSE']])
         nll_results.append(nll)
         rmse_results.append(rmse)
 

@@ -43,6 +43,24 @@ def rolling(days, x):
                      dtype = 'float32')
 
 def forward_garch(rets_test, rets_train, fit):
+    """
+    Conditional Volatility of a Garch(1,1) model on the test set.
+
+    Parameters
+    ----------
+    rets_test : tf.Tensor
+        test set of shape (n,1).
+    rets_train : tf.Tensor
+        train set of shape (m,1).
+    fit : arch.univariate.base.ARCHModelResult
+        the fitted model on the train set.
+
+    Returns
+    -------
+    tf.Tensor
+        conditional volatility on the test set of shape (n,1).
+
+    """
     mu, omega, alpha, beta = fit.params
     eps = rets_test-mu
     eps_0 = (rets_train[-1]-mu).numpy(); eps_0 = tf.convert_to_tensor(eps_0.reshape(-1,1), dtype = 'float32')
@@ -51,6 +69,67 @@ def forward_garch(rets_test, rets_train, fit):
     for t in range(rets_test.shape[0]):
         sigma2.append((omega+alpha*eps[t]**2+beta*sigma2[-1]).numpy()[0])
     return tf.expand_dims(tf.convert_to_tensor(sigma2[1:], dtype = 'float32')**.5,1)
+
+def forward_gjr(rets_test, rets_train, fit):
+    """
+    Conditional Volatility of a GJR(1,1,1) model on the test set.
+
+    Parameters
+    ----------
+    rets_test : tf.Tensor
+        test set of shape (n,1).
+    rets_train : tf.Tensor
+        train set of shape (m,1).
+    fit : arch.univariate.base.ARCHModelResult
+        the fitted model on the train set.
+
+    Returns
+    -------
+    tf.Tensor
+        conditional volatility on the test set of shape (n,1).
+
+    """
+    mu, omega, alpha, gamma, beta = fit.params
+    eps = rets_test-mu
+    eps_0 = (rets_train[-1]-mu).numpy(); eps_0 = tf.convert_to_tensor(eps_0.reshape(-1,1), dtype = 'float32')
+    eps = tf.concat((eps_0, eps[:-1,:]),0)
+    sigma2 = [fit.conditional_volatility[-1]**2]
+    for t in range(rets_test.shape[0]):
+        gjr_term = gamma*eps[t]**2*(eps[t].numpy()[0]<0)
+        sigma2.append((omega+alpha*eps[t]**2+beta*sigma2[-1]).numpy()[0]+gjr_term.numpy()[0])
+    return tf.expand_dims(tf.convert_to_tensor(sigma2[1:], dtype = 'float32')**.5,1)
+
+def forward_egarch(rets_test, rets_train, fit):
+    """
+    Conditional Volatility of an assymetric EGARCH(1,1,1) model on the test set.
+
+    Parameters
+    ----------
+    rets_test : tf.Tensor
+        test set of shape (n,1).
+    rets_train : tf.Tensor
+        train set of shape (m,1).
+    fit : arch.univariate.base.ARCHModelResult
+        the fitted model on the train set.
+
+    Returns
+    -------
+    tf.Tensor
+        conditional volatility on the test set of shape (n,1).
+
+    """
+    mu, omega, alpha, gamma, beta = fit.params
+    eps = rets_test-mu
+    eps_0 = (rets_train[-1]-mu).numpy(); eps_0 = tf.convert_to_tensor(eps_0.reshape(-1,1), dtype = 'float32')
+    eps = tf.concat((eps_0, eps[:-1,:]),0)
+    log_sigma2 = [np.log(fit.conditional_volatility[-1]**2)]
+    for t in range(rets_test.shape[0]):
+        e_t = eps[t].numpy()[0]/np.exp(log_sigma2[-1])**.5
+        log_sigma2.append((omega\
+                           + alpha*(np.abs(e_t)-np.sqrt(1/np.pi)) \
+                           + beta*log_sigma2[-1])\
+                           + gamma*e_t)
+    return tf.expand_dims(np.exp(tf.convert_to_tensor(log_sigma2[1:], dtype = 'float32'))**.5,1)
 
 def nll_gb_exp(y_hat, data):
     #y_hat = log(sigma**2)
