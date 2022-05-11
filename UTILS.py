@@ -11,6 +11,13 @@ from tensorflow.keras.utils import timeseries_dataset_from_array as loader
 from arch import arch_model
 pi = tf.constant(math.pi)
 
+
+
+
+# =============================================================================
+# add:df.set_index(_pd.DatetimeIndex(df.index), inplace = True):line247,history
+# =============================================================================
+
 def nll(sigma2, r):
     return .5*m.reduce_sum(m.log(2*pi) + m.log(sigma2) + m.divide(r**2, sigma2))
 

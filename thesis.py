@@ -9,7 +9,7 @@ from tensorflow import keras
 from keras.layers import SimpleRNN, Dense, Dropout, BatchNormalization, LSTM
 from tqdm import tqdm
 import matplotlib as mpl
-import numpy as np, tensorflow as tf
+import numpy as np, tensorflow as tf, pandas as pd, seaborn as sns
 import matplotlib.pyplot as plt
 import yfinance as yf
 from UTILS import train_test_split_ts, forward_garch, nll_gb_exp,\
@@ -23,6 +23,133 @@ from arch import arch_model
 mpl.rcParams['figure.figsize'] = (18,8)
 plt.style.use('ggplot')
 
+class CCC():
+    
+    #TODO: add log likelihood feature
+    
+    def __init__(self, prices):
+        '''
+        Conditional Constant Correlation model.
+
+        Parameters
+        ----------
+        prices : pd.DataFrame
+            The multidimensional time series of the assets' prices.
+
+        Returns
+        -------
+        None.
+
+        '''
+        self.prices = prices
+        self.returns = 100*prices.pct_change().dropna()
+        self.returns -= self.returns.mean()
+        self.garch_models  = {}
+        self.stock_names = self.returns.columns
+        self.conditional_covariances = {}
+        self.garch_volatilities = self.returns.copy()
+    
+    def fit(self):
+        '''
+        Fits the CCC model to the assets.
+        
+        Methodology:
+            - Fit of Garch models individually to every stock.
+            - Estimation of the Constant Correllation matrix via the 
+              devolatized returns.
+
+        Returns
+        -------
+        None.
+
+        '''
+        print('\nFitting CCC Model...\n')
+        for stock in tqdm(self.returns.columns):
+            self.garch_models[stock] = arch_model(self.returns[stock],
+                                              mean = 'Constant',
+                                              vol = 'GARCH',
+                                              p=1,
+                                              q=1).fit(disp = False)
+            self.garch_volatilities[stock]=\
+                self.garch_models[stock].conditional_volatility.values
+        self.P_c = np.divide(self.returns, self.garch_volatilities).cov()
+        for t in tqdm(range(self.returns.shape[0])):
+            Delta = np.diag(self.garch_volatilities.iloc[t])
+
+            self.conditional_covariances[t] = Delta@self.P_c@Delta
+                
+            self.conditional_covariances[t] =\
+                pd.DataFrame(self.conditional_covariances[t])
+            self.conditional_covariances[t].columns = self.stock_names
+            self.conditional_covariances[t].index = self.stock_names
+        return 
+    
+    def visualize_cov(self):
+        '''
+        Visualization of Time Varying Cov Matrix.
+        Takes about 15'
+
+        Returns
+        -------
+        None.
+
+        '''
+        for t in tqdm(range(self.returns.shape[0])):
+            sns.heatmap(self.conditional_covariances[t], cmap = 'viridis')
+            plt.title(self.returns.index[t])
+            plt.show()
+    
+    def plot_cov_feature(self, feature):
+        '''
+        Plots a 1-d feature of the conditional covariance matrices at every
+        time step.
+
+        Parameters
+        ----------
+        feature : str
+            ['det', 'trace', 'sum'].
+
+        Returns
+        -------
+        None.
+
+        '''
+        if feature == 'det':
+            fun = lambda x: np.linalg.det(x)
+        elif feature == 'trace':
+            fun = lambda x: np.trace(x)
+        elif feature == 'sum':
+            fun = lambda x: np.sum(np.sum(x))
+        else:
+            print('{} is not implemented yet!'.format(feature))
+            return None
+        
+        feat = []
+        for t in tqdm(range(self.returns.shape[0])):
+            feat.append(fun(self.conditional_covariances[t]))
+        plt.plot(self.returns.index, feat)
+        plt.title('{} of Covariance Matrices'.format(feature))
+        plt.show()
+        
+# =============================================================================
+#             EXAPMLE CODE
+#     data = pd.read_csv('SMI_data.csv', index_col = 'Date')
+#     data.index = pd.DatetimeIndex(data.index)
+#     
+#     ccc = CCC(data)
+#     ccc.fit()
+#     
+#     sns.heatmap(ccc.P_c, cmap = 'viridis')
+#     plt.title('Constant Correlation')
+#     plt.show()
+#     
+#     ccc.plot_cov_feature('det')
+#     ccc.plot_cov_feature('trace')
+#     ccc.plot_cov_feature('sum')
+#     
+#     ccc.visualize_cov()
+# =============================================================================
+        
 class DNN(keras.Model):
     
     def __init__(
@@ -595,8 +722,6 @@ def deployment_GB_1d(
             }
 
     
-
-#end\
     
 def output1(output_file =  r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Figures\1d'):
     """
