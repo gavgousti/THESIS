@@ -18,6 +18,29 @@ pi = tf.constant(math.pi)
 # add:df.set_index(_pd.DatetimeIndex(df.index), inplace = True):line247,history
 # =============================================================================
 
+def take_all_pairs(stocks):
+    '''
+    Calculates all the different pairs of the assets.
+
+    Parameters
+    ----------
+    stocks : list
+        List of asset names.
+
+    Returns
+    -------
+    pairs : list
+        List where every element is a unique pair.
+
+    '''
+    pairs = []
+    for one in stocks:
+        for two in stocks:
+            if one!=two:
+                if ((one, two) not in pairs) and ((two, one) not in pairs):
+                    pairs.append((one, two))
+    return pairs
+
 def nll(sigma2, r):
     return .5*m.reduce_sum(m.log(2*pi) + m.log(sigma2) + m.divide(r**2, sigma2))
 

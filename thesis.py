@@ -26,8 +26,9 @@ plt.style.use('ggplot')
 class CCC():
     
     #TODO: add log likelihood feature
+    #TODO: change the covariances to a 3d array
     
-    def __init__(self, prices):
+    def __init__(self, prices, scale = 100):
         '''
         Conditional Constant Correlation model.
 
@@ -42,7 +43,7 @@ class CCC():
 
         '''
         self.prices = prices
-        self.returns = 100*prices.pct_change().dropna()
+        self.returns = scale*prices.pct_change().dropna()
         self.returns -= self.returns.mean()
         self.garch_models  = {}
         self.stock_names = self.returns.columns
@@ -130,6 +131,21 @@ class CCC():
         plt.plot(self.returns.index, feat)
         plt.title('{} of Covariance Matrices'.format(feature))
         plt.show()
+        
+    def check_pd(self):
+        '''
+        Check if every covariance matrix is positive definite
+
+        Returns
+        -------
+        bool
+
+        '''
+        cond = []
+        for t in tqdm(range(len(self.conditional_covariances))):
+            cond.append(np.all(np.linalg.eigvals(self.conditional_covariances[t])>0))
+        return np.all(cond)
+
         
 # =============================================================================
 #             EXAPMLE CODE
