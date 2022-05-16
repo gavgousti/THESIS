@@ -17,8 +17,31 @@ pi = tf.constant(math.pi)
 # =============================================================================
 # add:df.set_index(_pd.DatetimeIndex(df.index), inplace = True):line247,history
 # =============================================================================
+def nll_md(cov, returns):
+    '''
+    Negative Log-Likelihood for Multidimensional Returns
 
-def take_all_pairs(stocks):
+    Parameters
+    ----------
+    cov : np.array
+        Cov 3d matrix of shape (T, d, d).
+    returns : pd.DataFrame
+        Asset returns of shape (T, d).
+
+    Returns
+    -------
+    s : np.array
+        Negative Log-likelihood.
+
+    '''
+    s = 0 
+    for t in range(returns.shape[0]):
+        x = returns.iloc[t].values.reshape(-1,1)
+        s+=.5*(np.log(np.linalg.det(cov[t,:,:]))+np.transpose(x)@\
+               np.linalg.inv(cov[t,:,:])@x)
+    return s
+    
+def take_pairs(stocks, method = 'contiguous'):
     '''
     Calculates all the different pairs of the assets.
 
@@ -26,7 +49,8 @@ def take_all_pairs(stocks):
     ----------
     stocks : list
         List of asset names.
-
+    stocks : str
+        Pairs to be returned, i.e. either "all" or "contiguous".
     Returns
     -------
     pairs : list
@@ -34,11 +58,19 @@ def take_all_pairs(stocks):
 
     '''
     pairs = []
-    for one in stocks:
-        for two in stocks:
-            if one!=two:
-                if ((one, two) not in pairs) and ((two, one) not in pairs):
-                    pairs.append((one, two))
+    if method == 'all':
+        for one in stocks:
+            for two in stocks:
+                if one!=two:
+                    if ([one, two] not in pairs) and ([two, one] not in pairs):
+                        pairs.append([one, two])
+    elif method == 'contiguous':
+        for i in range(stocks.shape[0]-1):
+            pairs.append([stocks[i],
+                               stocks[i+1]])
+    else:
+        print('Not compatible method!!!')
+        return None
     return pairs
 
 def nll(sigma2, r):

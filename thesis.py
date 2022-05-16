@@ -13,7 +13,8 @@ import numpy as np, tensorflow as tf, pandas as pd, seaborn as sns
 import matplotlib.pyplot as plt
 import yfinance as yf
 from UTILS import train_test_split_ts, forward_garch, nll_gb_exp,\
- nll_gb_exp_eval, take_X_y,nll, forward_gjr, forward_egarch
+ nll_gb_exp_eval, take_X_y,nll, forward_gjr, forward_egarch, nll_md,\
+     take_pairs
 
 import pyfiglet
 from sklearn.metrics import mean_squared_error as mse
@@ -23,24 +24,74 @@ from arch import arch_model
 mpl.rcParams['figure.figsize'] = (18,8)
 plt.style.use('ggplot')
 
-class CCC():
-    
-    #TODO: add log likelihood feature
-    #TODO: change the covariances to a 3d array
+class DCC():
     
     def __init__(self, prices, scale = 100):
         '''
-        Conditional Constant Correlation model.
+        Dynamic Conditional Correlation Model.
 
         Parameters
         ----------
         prices : pd.DataFrame
             The multidimensional time series of the assets' prices.
+        scale : int, optional
+            Scalling of the returns. The default is 100.
 
         Returns
         -------
         None.
 
+        '''
+        self.prices = prices
+        self.returns = scale*prices.pct_change().dropna()
+        self.returns -= self.returns.mean()
+        self.garch_models  = {}
+        self.stock_names = self.returns.columns
+        self.conditional_covariances = {}
+        self.garch_volatilities = self.returns.copy()
+        
+        def fit(self):
+            '''
+            Fits the DCC model to the assets.
+            
+            Methodology:
+                - Fit of Garch models individually to every stock.
+                - Estimation of the Constant Correllation matrix via the 
+                  devolatized returns.
+                TODO: add staff
+            Returns
+            -------
+            None.
+            '''
+            print('\nFitting CCC Model...\n'+20*'‾'+'\n')
+            
+            print('\n• Fitting individual GARCH(1,1) models...')
+            for stock in tqdm(self.returns.columns):
+                self.garch_models[stock] = arch_model(self.returns[stock],
+                                                  mean = 'Constant',
+                                                  vol = 'GARCH',
+                                                  p=1,
+                                                  q=1).fit(disp = False)
+                self.garch_volatilities[stock]=\
+                    self.garch_models[stock].conditional_volatility.values
+            self.P_c = np.divide(self.returns, self.garch_volatilities).cov()
+        
+
+class CCC():
+        
+    def __init__(self, prices, scale = 100):
+        '''
+        Conditional Constant Correlation model.
+        Parameters
+        ----------
+        prices : pd.DataFrame
+            The multidimensional time series of the assets' prices.
+        scale : int, optional
+            Scalling of the returns. The default is 100.
+            
+        Returns
+        -------
+        None.
         '''
         self.prices = prices
         self.returns = scale*prices.pct_change().dropna()
@@ -58,13 +109,13 @@ class CCC():
             - Fit of Garch models individually to every stock.
             - Estimation of the Constant Correllation matrix via the 
               devolatized returns.
-
         Returns
         -------
         None.
-
         '''
-        print('\nFitting CCC Model...\n')
+        print('\nFitting CCC Model...\n'+20*'‾'+'\n')
+        
+        print('\n• Fitting individual GARCH(1,1) models...')
         for stock in tqdm(self.returns.columns):
             self.garch_models[stock] = arch_model(self.returns[stock],
                                               mean = 'Constant',
@@ -74,6 +125,8 @@ class CCC():
             self.garch_volatilities[stock]=\
                 self.garch_models[stock].conditional_volatility.values
         self.P_c = np.divide(self.returns, self.garch_volatilities).cov()
+        
+        print('\n• Calculating conditional covariance matrices...')
         for t in tqdm(range(self.returns.shape[0])):
             Delta = np.diag(self.garch_volatilities.iloc[t])
 
@@ -83,19 +136,35 @@ class CCC():
                 pd.DataFrame(self.conditional_covariances[t])
             self.conditional_covariances[t].columns = self.stock_names
             self.conditional_covariances[t].index = self.stock_names
-        return 
+
+        self.cov = []
+        for t in range(self.returns.shape[0]):
+            self.cov.append(self.conditional_covariances[t])
+        self.cov = np.array(self.cov)
+        
+        print('\n• Calculating Composite-NLL...')
+        self.c_nll = 0
+        pairs_cont = take_pairs(
+            np.arange(self.stock_names.shape[0]),
+            'contiguous'
+            )
+        for pair in tqdm(pairs_cont):
+            self.c_nll+= nll_md(
+                self.cov[:,pair,:][:,:,pair],
+                self.returns.iloc[:, pair]
+                )
+        self.c_nll/=len(pairs_cont)
+        self.c_nll = self.c_nll[0,0]
     
     def visualize_cov(self):
         '''
         Visualization of Time Varying Cov Matrix.
         Takes about 15'
-
         Returns
         -------
         None.
-
         '''
-        for t in tqdm(range(self.returns.shape[0])):
+        for t in tqdm(range(0, self.returns.shape[0], 30)):
             sns.heatmap(self.conditional_covariances[t], cmap = 'viridis')
             plt.title(self.returns.index[t])
             plt.show()
@@ -104,16 +173,13 @@ class CCC():
         '''
         Plots a 1-d feature of the conditional covariance matrices at every
         time step.
-
         Parameters
         ----------
         feature : str
             ['det', 'trace', 'sum'].
-
         Returns
         -------
         None.
-
         '''
         if feature == 'det':
             fun = lambda x: np.linalg.det(x)
@@ -126,7 +192,7 @@ class CCC():
             return None
         
         feat = []
-        for t in tqdm(range(self.returns.shape[0])):
+        for t in range(self.returns.shape[0]):
             feat.append(fun(self.conditional_covariances[t]))
         plt.plot(self.returns.index, feat)
         plt.title('{} of Covariance Matrices'.format(feature))
@@ -135,11 +201,9 @@ class CCC():
     def check_pd(self):
         '''
         Check if every covariance matrix is positive definite
-
         Returns
         -------
         bool
-
         '''
         cond = []
         for t in tqdm(range(len(self.conditional_covariances))):
@@ -314,7 +378,6 @@ def deployment_RNN_1d(
         ):
     """
     # TBA
-
     Parameters
     ----------
     lstm : TYPE, optional
@@ -329,11 +392,9 @@ def deployment_RNN_1d(
         DESCRIPTION. The default is True.
      : TYPE
         DESCRIPTION.
-
     Returns
     -------
     None.
-
     """
     
     prices = yf.Ticker(index).history(start = start_date).Close
@@ -448,7 +509,6 @@ def deployment_DNN_1d(
         ):
     """
     
-
     Parameters
     ----------
     index : TYPE, optional
@@ -459,11 +519,9 @@ def deployment_DNN_1d(
         DESCRIPTION. The default is 20.
     include_rv : TYPE, optional
         DESCRIPTION. The default is True.
-
     Returns
     -------
     None.
-
     """
     
     prices = yf.Ticker(index).history(start = start_date).Close
@@ -562,7 +620,6 @@ def deployment_GB_1d(
         ):
     """
     TBA
-
     Parameters
     ----------
     index : TYPE, optional
@@ -573,11 +630,9 @@ def deployment_GB_1d(
         DESCRIPTION. The default is 20.
     include_rv : TYPE, optional
         DESCRIPTION. The default is True.
-
     Returns
     -------
     None.
-
     """
     
     prices = yf.Ticker(index).history(start = start_date).Close
@@ -744,11 +799,9 @@ def output1(output_file =  r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Fi
     Generation of results and figures for the One-dimensional case.
     
     List of Tickers used: ['^GSPC', '^DJI', '^IXIC', '^RUT', '^SSMI', '^OEX', '^N225', '^FTSE']
-
     Returns
     -------
     None.
-
     """
     
     tickers = ['^GSPC', '^DJI', '^IXIC', '^RUT', '^SSMI', '^OEX', '^N225', '^FTSE']
@@ -773,4 +826,3 @@ def output1(output_file =  r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Fi
         rmse_results.append(rmse)
 
     return nll_results, rmse_results
-    
