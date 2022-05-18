@@ -14,13 +14,15 @@ from thesis import CCC
 import pandas as pd, seaborn as sns, matplotlib.pyplot as plt
 import time, numpy as np, matplotlib as mpl
 from tqdm import tqdm
-from UTILS import take_pairs, nll_md
-
+from UTILS import take_pairs, nll_md, dcc_comp_nll
+from scipy.optimize import minimize
+import plotly.graph_objects as go
+from plotly.offline import plot
 cmap = mpl.colors.ListedColormap(plt.get_cmap('tab20')(np.linspace(0,1,20)))
 mpl.rcParams['axes.prop_cycle'] = plt.cycler('color', cmap.colors)
 
-
-data = pd.read_csv(r"C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Data\SMI_data.csv", index_col = 'Date')
+path = 'C:\\Users\\gavgous\\OneDrive - Zanders-BV\\Desktop\\THESIS\\CODE\\THESIS-main\\'
+data = pd.read_csv(path+"SMI_data.csv", index_col = 'Date')
 data.index = pd.DatetimeIndex(data.index)
 
 ccc = CCC(data, scale = 100)
@@ -34,118 +36,140 @@ ccc.plot_cov_feature('det')
 ccc.plot_cov_feature('trace')
 ccc.plot_cov_feature('sum')
 
-print(ccc.c_nll)
+# =============================================================================
+# test what explodes
+# =============================================================================
 
-def dcc_c_nll(
-        alpha,
-        beta, 
-        sigma,
-        P_c,
-        x
-        ):
-    '''
-    Calculated a negative log likelihood of p-dimensional returns.
-    Used for the DCC model.
+ccc.plot_cov_feature('det')
+#the determinant explodes
 
-    Parameters
-    ----------
-    alpha : float
-        alpha parameter of DCC.
-    beta : float
-        beta parameter of DCC..
-    sigma : pd.DataFrame
-        Conditional volatilities of the Garch models. Shape = (T, p)
-    P_c : pd.DataFrame
-        Constant Conditional Correlation of shape (p,p).
-    x : pd.DataFrame
-        Returns of shape (T,p).
+prod = []
+for t in range(ccc.returns.shape[0]):
+    Sigma_t = ccc.cov[t, :, :]
+    x_ = ccc.returns.iloc[t].values.reshape(-1,1)
+    prod.append((np.transpose(x_)@np.linalg.inv(Sigma_t)@x_)[0][0])
+plt.plot(ccc.returns.index, prod)
+plt.show()
+# the product is quite stable
 
-    Returns
-    -------
-    float
-        Negative log-likelihood value.
+det3 = []
+for t in range(ccc.returns.shape[0]):
+    Sigma_t = ccc.cov[t, :, :]
+    x_ = ccc.returns.iloc[t].values.reshape(-1,1)
+    det3.append(np.log(np.linalg.det(Sigma_t)))
+plt.plot(ccc.returns.index, det3)
+plt.show()
 
-    '''
+plt.plot(ccc.returns.index, np.array(prod)+np.array(det3))
+plt.show()
+
+plt.plot(ccc.returns.index, .5*np.cumsum(np.array(prod)+np.array(det3)))
+plt.show()
+
+#Explosion seems to not matter at all as log fixes it
+
+# =============================================================================
+# -----------------------------------------------------------------------------
+# =============================================================================
+
+
+
+
+# =============================================================================
+# OPTIMIZATION 
+# =============================================================================
+
+def constraint(theta):
+    return 1-theta[0]-theta[1]
+
+res = minimize(
+    fun =  dcc_comp_nll,
+    x0 = (.001, .001),
+    args = (ccc.garch_volatilities, ccc.returns, 'full', 1),
+    method = 'SLSQP',
+    bounds = [(0,1), (0,1)],
+    constraints = {'type': 'ineq', 'fun': constraint},
+    options = {'maxiter': 20, 'disp': True}    
+    )
+
+res
+
+theta = res.x
+
+def take_DCC_cov(theta, sigma, P_c, x):
     P_c = P_c.values
     prev_corr = P_c.copy()
-    val = 0
+    alpha, beta = theta
+    cov = np.full((x.shape[0], x.shape[1], x.shape[1]), .0)
     for t in range(x.shape[0]):
-        x_ = x.iloc[0].values.reshape(-1,1)
+        x_ = x.iloc[t].values.reshape(-1,1)
         sigma_ = sigma.iloc[t].values    
         
         Sigma_t = np.diag(sigma_)@\
             ((1-alpha-beta)*P_c+alpha*x_@np.transpose(x_)+beta*prev_corr)@\
                 np.diag(sigma_)
-                
-        val+=np.log(np.linalg.det(Sigma_t)) +\
-            np.transpose(x_)@np.linalg.inv(Sigma_t)@x_
-            
+        cov[t, :, :] = Sigma_t
         prev_corr = np.diag(1/sigma_)@Sigma_t@np.diag(1/sigma_)
-    return .5*val[0][0]
-
-alpha = .3; beta = .3
-sigma = ccc.garch_volatilities.iloc[:, [0,1]]
-P_c = ccc.P_c.iloc[[0,1], [0,1]]
-x = ccc.returns.iloc[:, [0,1]]
-
-dcc_c_nll(alpha, beta, sigma, P_c, x)
-
-def dcc_comp_nll(
-        alpha,
-        beta,
-        volatilities,
-        stock_names,
-        X,
-        P_c
-        ):
-    #TODO: docstring
-    '''
+    return cov
     
+dcc_cov = take_DCC_cov(theta, ccc.garch_volatilities, ccc.P_c, ccc.returns)
 
-    Parameters
-    ----------
-    alpha : TYPE
-        DESCRIPTION.
-    beta : TYPE
-        DESCRIPTION.
-    volatilities : TYPE
-        DESCRIPTION.
-    stock_names : TYPE
-        DESCRIPTION.
-    X : TYPE
-        DESCRIPTION.
-    P_c : TYPE
-        DESCRIPTION.
+for t in tqdm(range(0, ccc.returns.shape[0], 60)):
+    sns.heatmap(dcc_cov[t, :, :])
+    plt.title(ccc.returns.index[t])
+    plt.show()
 
-    Returns
-    -------
-    TYPE
-        DESCRIPTION.
+plt.plot(np.sum(np.sum(dcc_cov, axis = 1 ), axis=1))
 
-    '''
-    val = 0 
-    pairs_cont = take_pairs(
-        np.arange(stock_names.shape[0]),
-        'contiguous'
-        )
-    for pair in tqdm(pairs_cont):
-        val+=dcc_c_nll(
-            alpha,
-            beta,
-            volatilities.iloc[:, pair],
-            P_c.iloc[pair,:].iloc[:, pair],
-            X.iloc[:, pair])
-    return val/len(pairs_cont)
-    
+# =============================================================================
+# try a different optimization approach
+# =============================================================================
+N = 15
+values = []
+alpha_grid = np.linspace(0, .2, N)
+beta_grid = np.linspace(0, .2, N)
+for alpha in tqdm(alpha_grid):
+    tempo = []
+    for beta in beta_grid:
+        if beta+alpha<.9:
+            tempo.append(dcc_comp_nll((alpha, beta),
+                                      ccc.garch_volatilities,
+                                      ccc.returns,
+                                      'full',
+                                      .1)
+                         )
+        else:
+            tempo.append(np.nan)
+    values.append(tempo)
+values = pd.DataFrame(values, columns = beta_grid, index = alpha_grid)
 
-dcc_comp_nll(.01,
-             .01,
-             ccc.garch_volatilities,
-             ccc.stock_names,
-             ccc.returns,
-             ccc.P_c
-             )
-ccc.c_nll
+sns.heatmap(values, vmax=None)
+plt.show()
 
-#TODO: why different value when alpha, beta = 0,0?
-#TODO: optimization
+fig = go.Figure(data=[go.Surface(z=values.values, x = beta_grid, y = alpha_grid)])
+fig.update_layout(
+    xaxis_title="beta",
+    yaxis_title="alpha"
+)
+plot(fig)
+
+values.argmin()
+
+theta = (.071, .071)
+dcc_cov = take_DCC_cov(theta, ccc.garch_volatilities, ccc.P_c, ccc.returns)
+
+for t in tqdm(range(0, ccc.returns.shape[0], 60)):
+    sns.heatmap(dcc_cov[t, :, :])
+    plt.title(ccc.returns.index[t])
+    plt.show()
+
+plt.plot(np.sum(np.sum(dcc_cov, axis = 1 ), axis=1))
+
+dcc_comp_nll(theta, ccc.garch_volatilities, ccc.returns, 'full',1)
+dcc_comp_nll((0,0), ccc.garch_volatilities, ccc.returns, 'full',1)
+
+# =============================================================================
+# TO SUM UP, IT SEEMS THAT THE MINIMUM DOES NOT NECESSARILY FINDS A 
+# NICE ESTIMATOR. WE HAVE TO HAVE A LOOK AGAIN IN THE LOSS FUNCTIONS
+# AND SEE IF WE CAN SOMEHOW MAKE THE OPTIMIZATION MORE STABLE !!! (17/05/22)
+# =============================================================================

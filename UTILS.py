@@ -9,6 +9,7 @@ import tensorflow as tf, tensorflow.math as m, numpy as np, pandas as pd
 import math 
 from tensorflow.keras.utils import timeseries_dataset_from_array as loader
 from arch import arch_model
+from tqdm import tqdm
 pi = tf.constant(math.pi)
 
 
@@ -17,6 +18,99 @@ pi = tf.constant(math.pi)
 # =============================================================================
 # add:df.set_index(_pd.DatetimeIndex(df.index), inplace = True):line247,history
 # =============================================================================
+
+def dcc_nll(
+        alpha,
+        beta, 
+        sigma,
+        P_c,
+        x
+        ):
+    '''
+    Calculated a negative log likelihood of p-dimensional returns.
+    Used for the DCC model.
+
+    Parameters
+    ----------
+    alpha : float
+        alpha parameter of DCC.
+    beta : float
+        beta parameter of DCC..
+    sigma : pd.DataFrame
+        Conditional volatilities of the Garch models. Shape = (T, p)
+    P_c : pd.DataFrame
+        Constant Conditional Correlation of shape (p,p).
+    x : pd.DataFrame
+        Returns of shape (T,p).
+
+    Returns
+    -------
+    float
+        Negative log-likelihood value.
+
+    '''
+    P_c = P_c.values
+    prev_corr = P_c.copy()
+    val = 0
+    for t in range(x.shape[0]):
+        x_ = x.iloc[t].values.reshape(-1,1)
+        sigma_ = sigma.iloc[t].values    
+        
+        Sigma_t = np.diag(sigma_)@\
+            ((1-alpha-beta)*P_c+alpha*x_@np.transpose(x_)+beta*prev_corr)@\
+                np.diag(sigma_)
+                
+        val += .5*(np.log(np.linalg.det(Sigma_t)) +\
+            np.transpose(x_)@np.linalg.inv(Sigma_t)@x_)
+            
+        prev_corr = np.diag(1/sigma_)@Sigma_t@np.diag(1/sigma_)
+    return val[0][0]
+
+def dcc_comp_nll(theta, *args):
+    '''
+    Composite Negative Log Likelihood for the DCC model
+
+
+    Parameters
+    ----------
+    theta : tuple
+        Tuple of shape (2,) with the DCC parameters.
+        
+    volatilities : pd.DataFrame
+        Conditional volatilities of the assets.
+        Shape = (T, p).
+        
+    X : pd.DataFrame
+        DF of the asset returns of shape (T, p).
+
+    Returns
+    -------
+    float
+        The Composite NLL (from contiguous pairs).
+
+    '''
+    alpha, beta = theta
+    volatilities, X, pair_method, lambda_ = args
+    P_c = np.divide(X, volatilities).cov()
+    stock_names = volatilities.columns
+    val = 0 
+    if pair_method=='contiguous':
+        pairs = take_pairs(
+            np.arange(stock_names.shape[0]),
+            'contiguous'
+            )
+    elif pair_method=='full':
+        pairs = [np.arange(stock_names.shape[0]).tolist()]
+        
+    for pair in tqdm(pairs):
+        val+=dcc_nll(
+            alpha,
+            beta,
+            volatilities.iloc[:, pair],
+            P_c.iloc[pair,:].iloc[:, pair],
+            X.iloc[:, pair])
+    return lambda_*val/len(pairs) + (1-lambda_)*np.linalg.norm(theta, 2)
+   
 def nll_md(cov, returns):
     '''
     Negative Log-Likelihood for Multidimensional Returns
@@ -39,7 +133,7 @@ def nll_md(cov, returns):
         x = returns.iloc[t].values.reshape(-1,1)
         s+=.5*(np.log(np.linalg.det(cov[t,:,:]))+np.transpose(x)@\
                np.linalg.inv(cov[t,:,:])@x)
-    return s
+    return s[0][0]
     
 def take_pairs(stocks, method = 'contiguous'):
     '''

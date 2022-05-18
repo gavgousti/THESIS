@@ -75,6 +75,7 @@ class DCC():
                 self.garch_volatilities[stock]=\
                     self.garch_models[stock].conditional_volatility.values
             self.P_c = np.divide(self.returns, self.garch_volatilities).cov()
+            #TODO: Continue with the optimization
         
 
 class CCC():
@@ -154,7 +155,6 @@ class CCC():
                 self.returns.iloc[:, pair]
                 )
         self.c_nll/=len(pairs_cont)
-        self.c_nll = self.c_nll[0,0]
     
     def visualize_cov(self):
         '''
