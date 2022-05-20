@@ -18,155 +18,61 @@ pi = tf.constant(math.pi)
 # =============================================================================
 # add:df.set_index(_pd.DatetimeIndex(df.index), inplace = True):line247,history
 # =============================================================================
-
-def dcc_nll(
-        alpha,
-        beta, 
+def dcc_nll_fixed(
+        theta,
         sigma,
-        P_c,
         x
         ):
-    '''
-    Calculated a negative log likelihood of p-dimensional returns.
-    Used for the DCC model.
-
-    Parameters
-    ----------
-    alpha : float
-        alpha parameter of DCC.
-    beta : float
-        beta parameter of DCC..
-    sigma : pd.DataFrame
-        Conditional volatilities of the Garch models. Shape = (T, p)
-    P_c : pd.DataFrame
-        Constant Conditional Correlation of shape (p,p).
-    x : pd.DataFrame
-        Returns of shape (T,p).
-
-    Returns
-    -------
-    float
-        Negative log-likelihood value.
-
-    '''
-    P_c = P_c.values
-    prev_corr = P_c.copy()
-    val = 0
-    for t in range(x.shape[0]):
-        x_ = x.iloc[t].values.reshape(-1,1)
-        sigma_ = sigma.iloc[t].values    
-        
-        Sigma_t = np.diag(sigma_)@\
-            ((1-alpha-beta)*P_c+alpha*x_@np.transpose(x_)+beta*prev_corr)@\
-                np.diag(sigma_)
-                
-        val += .5*(np.log(np.linalg.det(Sigma_t)) +\
-            np.transpose(x_)@np.linalg.inv(Sigma_t)@x_)
-            
-        prev_corr = np.diag(1/sigma_)@Sigma_t@np.diag(1/sigma_)
-    return val[0][0]
-
-def dcc_comp_nll(theta, *args):
-    '''
-    Composite Negative Log Likelihood for the DCC model
-
-
-    Parameters
-    ----------
-    theta : tuple
-        Tuple of shape (2,) with the DCC parameters.
-        
-    volatilities : pd.DataFrame
-        Conditional volatilities of the assets.
-        Shape = (T, p).
-        
-    X : pd.DataFrame
-        DF of the asset returns of shape (T, p).
-
-    Returns
-    -------
-    float
-        The Composite NLL (from contiguous pairs).
-
-    '''
     alpha, beta = theta
-    volatilities, X, pair_method, lambda_ = args
-    P_c = np.divide(X, volatilities).cov()
-    stock_names = volatilities.columns
-    val = 0 
-    if pair_method=='contiguous':
-        pairs = take_pairs(
-            np.arange(stock_names.shape[0]),
-            'contiguous'
-            )
-    elif pair_method=='full':
-        pairs = [np.arange(stock_names.shape[0]).tolist()]
+    Q_bar = np.divide(x, sigma).cov().values
+    Q_t = Q_bar.copy()
+    nll = 0
+    for t in tqdm(range(x.shape[0])):
+        x_ = x.iloc[t].values.reshape(-1,1)
+        sigma_ = sigma.iloc[t].values.reshape(-1,1)
+        eps = np.divide(x_, sigma_)
         
-    for pair in tqdm(pairs):
-        val+=dcc_nll(
-            alpha,
-            beta,
-            volatilities.iloc[:, pair],
-            P_c.iloc[pair,:].iloc[:, pair],
-            X.iloc[:, pair])
-    return lambda_*val/len(pairs) + (1-lambda_)*np.linalg.norm(theta, 2)
-   
-def nll_md(cov, returns):
-    '''
-    Negative Log-Likelihood for Multidimensional Returns
-
-    Parameters
-    ----------
-    cov : np.array
-        Cov 3d matrix of shape (T, d, d).
-    returns : pd.DataFrame
-        Asset returns of shape (T, d).
-
-    Returns
-    -------
-    s : np.array
-        Negative Log-likelihood.
-
-    '''
-    s = 0 
-    for t in range(returns.shape[0]):
-        x = returns.iloc[t].values.reshape(-1,1)
-        s+=.5*(np.log(np.linalg.det(cov[t,:,:]))+np.transpose(x)@\
-               np.linalg.inv(cov[t,:,:])@x)
-    return s[0][0]
+        Q_t = (1-alpha-beta)*Q_bar+\
+            alpha*eps@eps.transpose()+\
+                beta*Q_t
+                
+        P_t = np.diag(np.diag(1/np.sqrt(Q_t)))@\
+            Q_t@\
+                np.diag(np.diag(1/np.sqrt(Q_t)))
+                
+        Sigma_t = np.diag(sigma_.ravel())@P_t@np.diag(sigma_.ravel())
+        
+        nll+= .5*(np.log(np.linalg.det(Sigma_t)) +\
+            np.transpose(x_)@np.linalg.inv(Sigma_t)@x_)
+    return nll[0,0]
     
-def take_pairs(stocks, method = 'contiguous'):
-    '''
-    Calculates all the different pairs of the assets.
-
-    Parameters
-    ----------
-    stocks : list
-        List of asset names.
-    stocks : str
-        Pairs to be returned, i.e. either "all" or "contiguous".
-    Returns
-    -------
-    pairs : list
-        List where every element is a unique pair.
-
-    '''
-    pairs = []
-    if method == 'all':
-        for one in stocks:
-            for two in stocks:
-                if one!=two:
-                    if ([one, two] not in pairs) and ([two, one] not in pairs):
-                        pairs.append([one, two])
-    elif method == 'contiguous':
-        for i in range(stocks.shape[0]-1):
-            pairs.append([stocks[i],
-                               stocks[i+1]])
-    else:
-        print('Not compatible method!!!')
-        return None
-    return pairs
-
+    
+def pseudo_dcc_nll(
+        theta, 
+        sigma,
+        x
+        ):
+    alpha, beta = theta
+    Q_bar = np.divide(x, sigma).cov().values
+    Q_t = Q_bar.copy()
+    nll = 0
+    for t in tqdm(range(x.shape[0])):
+        x_ = x.iloc[t].values.reshape(-1,1)
+        sigma_ = sigma.iloc[t].values.reshape(-1,1)
+        eps = np.divide(x_, sigma_)
+        
+        Q_t = (1-alpha-beta)*Q_bar+\
+            alpha*eps@eps.transpose()+\
+                beta*Q_t
+                
+        P_t = np.diag(np.diag(1/np.sqrt(Q_t)))@\
+            Q_t@\
+                np.diag(np.diag(1/np.sqrt(Q_t)))
+                        
+        nll+= .5*(np.log(np.linalg.det(P_t)) +\
+            np.transpose(eps)@np.linalg.inv(P_t)@eps)
+    return nll[0,0]
+    
 def nll(sigma2, r):
     return .5*m.reduce_sum(m.log(2*pi) + m.log(sigma2) + m.divide(r**2, sigma2))
 

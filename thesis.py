@@ -13,8 +13,7 @@ import numpy as np, tensorflow as tf, pandas as pd, seaborn as sns
 import matplotlib.pyplot as plt
 import yfinance as yf
 from UTILS import train_test_split_ts, forward_garch, nll_gb_exp,\
- nll_gb_exp_eval, take_X_y,nll, forward_gjr, forward_egarch, nll_md,\
-     take_pairs
+ nll_gb_exp_eval, take_X_y,nll, forward_gjr, forward_egarch, dcc_nll_fixed
 
 import pyfiglet
 from sklearn.metrics import mean_squared_error as mse
@@ -143,18 +142,13 @@ class CCC():
             self.cov.append(self.conditional_covariances[t])
         self.cov = np.array(self.cov)
         
-        print('\n• Calculating Composite-NLL...')
-        self.c_nll = 0
-        pairs_cont = take_pairs(
-            np.arange(self.stock_names.shape[0]),
-            'contiguous'
-            )
-        for pair in tqdm(pairs_cont):
-            self.c_nll+= nll_md(
-                self.cov[:,pair,:][:,:,pair],
-                self.returns.iloc[:, pair]
-                )
-        self.c_nll/=len(pairs_cont)
+        print('\n• Calculating NLL...')
+        self.nll = dcc_nll_fixed((0,0),
+                           self.garch_volatilities,
+                           self.returns
+                           )
+        
+        
     
     def visualize_cov(self):
         '''
