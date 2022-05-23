@@ -18,7 +18,54 @@ pi = tf.constant(math.pi)
 # =============================================================================
 # add:df.set_index(_pd.DatetimeIndex(df.index), inplace = True):line247,history
 # =============================================================================
-def dcc_nll_fixed(
+def take_DCC_cov(
+        theta,
+        sigma,
+        P_c,
+        x):
+    '''
+    Helper function for obtaining the covariances in the DCC model.
+
+    Parameters
+    ----------
+    theta : tuple
+        (alpha, beta).
+    sigma : pd.DataFrame
+        Individual volatilities.
+    P_c : pd.DataFrame
+        Constant Correlation matrix.
+    x : pd.DataFrame
+        Assets' returns.
+
+    Returns
+    -------
+    cov : np.array
+        3d array of shape (T, d, d) storing the covariances.
+
+    '''
+    cov = np.full((x.shape[0], x.shape[1], x.shape[1]), .0)
+    alpha, beta = theta
+    Q_bar = np.divide(x, sigma).cov().values
+    Q_t = Q_bar.copy()
+    for t in tqdm(range(x.shape[0])):
+        x_ = x.iloc[t].values.reshape(-1,1)
+        sigma_ = sigma.iloc[t].values.reshape(-1,1)
+        eps = np.divide(x_, sigma_)
+        
+        Q_t = (1-alpha-beta)*Q_bar+\
+            alpha*eps@eps.transpose()+\
+                beta*Q_t
+        
+        P_t = np.diag(np.diag(1/np.sqrt(Q_t)))@\
+            Q_t@\
+                np.diag(np.diag(1/np.sqrt(Q_t)))
+                
+        Sigma_t = np.diag(sigma_.ravel())@P_t@np.diag(sigma_.ravel())
+                
+        cov[t, :, :] = Sigma_t
+    return cov
+
+def dcc_nll(
         theta,
         sigma,
         x
@@ -27,7 +74,7 @@ def dcc_nll_fixed(
     Q_bar = np.divide(x, sigma).cov().values
     Q_t = Q_bar.copy()
     nll = 0
-    for t in tqdm(range(x.shape[0])):
+    for t in range(x.shape[0]):
         x_ = x.iloc[t].values.reshape(-1,1)
         sigma_ = sigma.iloc[t].values.reshape(-1,1)
         eps = np.divide(x_, sigma_)
@@ -46,32 +93,6 @@ def dcc_nll_fixed(
             np.transpose(x_)@np.linalg.inv(Sigma_t)@x_)
     return nll[0,0]
     
-    
-def pseudo_dcc_nll(
-        theta, 
-        sigma,
-        x
-        ):
-    alpha, beta = theta
-    Q_bar = np.divide(x, sigma).cov().values
-    Q_t = Q_bar.copy()
-    nll = 0
-    for t in tqdm(range(x.shape[0])):
-        x_ = x.iloc[t].values.reshape(-1,1)
-        sigma_ = sigma.iloc[t].values.reshape(-1,1)
-        eps = np.divide(x_, sigma_)
-        
-        Q_t = (1-alpha-beta)*Q_bar+\
-            alpha*eps@eps.transpose()+\
-                beta*Q_t
-                
-        P_t = np.diag(np.diag(1/np.sqrt(Q_t)))@\
-            Q_t@\
-                np.diag(np.diag(1/np.sqrt(Q_t)))
-                        
-        nll+= .5*(np.log(np.linalg.det(P_t)) +\
-            np.transpose(eps)@np.linalg.inv(P_t)@eps)
-    return nll[0,0]
     
 def nll(sigma2, r):
     return .5*m.reduce_sum(m.log(2*pi) + m.log(sigma2) + m.divide(r**2, sigma2))

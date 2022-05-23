@@ -8,13 +8,16 @@ Created on Mon Mar 28 14:36:51 2022
 from tensorflow import keras
 from keras.layers import SimpleRNN, Dense, Dropout, BatchNormalization, LSTM
 from tqdm import tqdm
-import matplotlib as mpl
+import matplotlib as mpl, time
+from scipy.optimize import minimize
 import numpy as np, tensorflow as tf, pandas as pd, seaborn as sns
 import matplotlib.pyplot as plt
 import yfinance as yf
 from UTILS import train_test_split_ts, forward_garch, nll_gb_exp,\
- nll_gb_exp_eval, take_X_y,nll, forward_gjr, forward_egarch, dcc_nll_fixed
-
+ nll_gb_exp_eval, take_X_y,nll, forward_gjr, forward_egarch, dcc_nll,\
+     take_DCC_cov
+import plotly.graph_objects as go
+from plotly.offline import plot
 import pyfiglet
 from sklearn.metrics import mean_squared_error as mse
 import lightgbm as lgb
@@ -23,175 +26,144 @@ from arch import arch_model
 mpl.rcParams['figure.figsize'] = (18,8)
 plt.style.use('ggplot')
 
-class DCC():
-    
-    def __init__(self, prices, scale = 100):
+class CC():
+    #TODO: add forward method 
+    def __init__(
+            self,
+            prices, 
+            scale = 100,
+            correlation_type = 'Constant'
+            ):
         '''
-        Dynamic Conditional Correlation Model.
+        Conditional Correlation Model
 
         Parameters
         ----------
         prices : pd.DataFrame
-            The multidimensional time series of the assets' prices.
+            The multidimensional time series of the assets' prices
+            shape = (T, d)
         scale : int, optional
             Scalling of the returns. The default is 100.
+        correlation_type : str, optional
+            Type of the correation structure.
+            Available types "Constant" or "Dynamic"
+            The default is 'Constant'.
 
         Returns
         -------
         None.
 
         '''
-        self.prices = prices
-        self.returns = scale*prices.pct_change().dropna()
+        
+        self.returns =scale*prices.pct_change().dropna()
         self.returns -= self.returns.mean()
         self.garch_models  = {}
         self.stock_names = self.returns.columns
-        self.conditional_covariances = {}
-        self.garch_volatilities = self.returns.copy()
+        self.covariances = []
+        self.volatilities = self.returns.copy()-self.returns.copy()
+        self.type = correlation_type
+        self.real_covariance = []
         
-        def fit(self):
-            '''
-            Fits the DCC model to the assets.
-            
-            Methodology:
-                - Fit of Garch models individually to every stock.
-                - Estimation of the Constant Correllation matrix via the 
-                  devolatized returns.
-                TODO: add staff
-            Returns
-            -------
-            None.
-            '''
-            print('\nFitting CCC Model...\n'+20*'‾'+'\n')
-            
-            print('\n• Fitting individual GARCH(1,1) models...')
+        for i in range(22, self.returns.shape[0]):
+            self.real_covariance.append(self.returns.iloc[i-22:i, :].cov().\
+                                        values)
+        self.real_covariance = np.array(self.real_covariance)
+
+    
+    def fit(
+            self,
+            volatility = 'GARCH'
+            ):
+        
+        #TODO: Extend for more volatility inputs
+        
+        print('\nFitting '+self.type+' CC Model...\n'+30*'‾'+'\n')
+        
+        print('\n• Fitting individual volatility models...')
+        if volatility == 'GARCH':
             for stock in tqdm(self.returns.columns):
                 self.garch_models[stock] = arch_model(self.returns[stock],
                                                   mean = 'Constant',
                                                   vol = 'GARCH',
                                                   p=1,
                                                   q=1).fit(disp = False)
-                self.garch_volatilities[stock]=\
+                self.volatilities[stock]=\
                     self.garch_models[stock].conditional_volatility.values
-            self.P_c = np.divide(self.returns, self.garch_volatilities).cov()
-            #TODO: Continue with the optimization
+       
+        self.P_c = np.divide(self.returns, self.volatilities).cov()
         
-
-class CCC():
-        
-    def __init__(self, prices, scale = 100):
-        '''
-        Conditional Constant Correlation model.
-        Parameters
-        ----------
-        prices : pd.DataFrame
-            The multidimensional time series of the assets' prices.
-        scale : int, optional
-            Scalling of the returns. The default is 100.
-            
-        Returns
-        -------
-        None.
-        '''
-        self.prices = prices
-        self.returns = scale*prices.pct_change().dropna()
-        self.returns -= self.returns.mean()
-        self.garch_models  = {}
-        self.stock_names = self.returns.columns
-        self.conditional_covariances = {}
-        self.garch_volatilities = self.returns.copy()
-    
-    def fit(self):
-        '''
-        Fits the CCC model to the assets.
-        
-        Methodology:
-            - Fit of Garch models individually to every stock.
-            - Estimation of the Constant Correllation matrix via the 
-              devolatized returns.
-        Returns
-        -------
-        None.
-        '''
-        print('\nFitting CCC Model...\n'+20*'‾'+'\n')
-        
-        print('\n• Fitting individual GARCH(1,1) models...')
-        for stock in tqdm(self.returns.columns):
-            self.garch_models[stock] = arch_model(self.returns[stock],
-                                              mean = 'Constant',
-                                              vol = 'GARCH',
-                                              p=1,
-                                              q=1).fit(disp = False)
-            self.garch_volatilities[stock]=\
-                self.garch_models[stock].conditional_volatility.values
-        self.P_c = np.divide(self.returns, self.garch_volatilities).cov()
-        
-        print('\n• Calculating conditional covariance matrices...')
-        for t in tqdm(range(self.returns.shape[0])):
-            Delta = np.diag(self.garch_volatilities.iloc[t])
-
-            self.conditional_covariances[t] = Delta@self.P_c@Delta
+        if self.type == 'Constant':
+            print('\n• Calculating conditional covariance matrices...')
+            for t in tqdm(range(self.returns.shape[0])):
+                Delta = np.diag(self.volatilities.iloc[t])
+                cov = Delta@self.P_c@Delta
+                self.covariances.append(cov)
+                del cov
+            self.covariances = np.array(self.covariances)
                 
-            self.conditional_covariances[t] =\
-                pd.DataFrame(self.conditional_covariances[t])
-            self.conditional_covariances[t].columns = self.stock_names
-            self.conditional_covariances[t].index = self.stock_names
+            print('\n• Calculating NLL...')
+            self.nll = dcc_nll((0,0), self.volatilities, self.returns)
+            print('NLL: {:6.0f}'.format(self.nll))
+        
+        elif self.type == 'Dynamic':
+            start = time.time()
+            print('\n• Optimization for the parameters alpha and beta...\n')
+            self.nll_optimization = minimize(
+                fun =  dcc_nll,
+                x0 = (.05, .05),
+                args = (self.volatilities, self.returns),
+                method = 'SLSQP',
+                bounds = [(0,1), (0,1)],
+                constraints = {'type': 'ineq', 'fun': lambda x: 1-x[0]-x[1]},
+                options = {'maxiter': 30, 'disp': True, 'full_output':True}    
+                )
+            theta = self.nll_optimization.x
+            end = time.time()
+            print('\n• Calculating conditional covariance matrices...')
+            self.covariances = take_DCC_cov(
+                theta,
+                self.volatilities,
+                self.P_c,
+                self.returns
+                )
 
-        self.cov = []
-        for t in range(self.returns.shape[0]):
-            self.cov.append(self.conditional_covariances[t])
-        self.cov = np.array(self.cov)
+            print('\n   ➼Time Elapsed for Optimization: {:4.0f}"'\
+                  .format(end-start))
+
+            print('   ➼NLL Value: {:7.0f}'.format(dcc_nll(theta,
+                                                       self.volatilities,
+                                                       self.returns)
+                                               ))
+            print('   ➼alpha, beta = {:1.3f}, {:1.3f}\n'.\
+                  format(theta[0], theta[1]))
         
-        print('\n• Calculating NLL...')
-        self.nll = dcc_nll_fixed((0,0),
-                           self.garch_volatilities,
-                           self.returns
-                           )
-        
-        
-    
-    def visualize_cov(self):
+        plt.plot(self.covariances.sum(1).sum(1)[22:]**.5,
+                 label = 'Model Volatility')
+        plt.plot(self.real_covariance.sum(1).sum(1)**.5,
+                 label = 'Realized Volatility')
+        plt.legend()
+        plt.title('Outputted Volatility Comparison (RMSE: {:3.3f})'.\
+                  format(mse(self.covariances.sum(1).sum(1)[22:]**.5,
+            self.real_covariance.sum(1).sum(1)**.5)**.5))
+        plt.show()
+
+            
+    def visualize_cov(
+            self
+            ):
         '''
         Visualization of Time Varying Cov Matrix.
-        Takes about 15'
         Returns
         -------
         None.
         '''
         for t in tqdm(range(0, self.returns.shape[0], 30)):
-            sns.heatmap(self.conditional_covariances[t], cmap = 'viridis')
+            df = pd.DataFrame(self.covariances[t, :, :])
+            df.columns, df.index = self.returns.columns, self.returns.columns
+            sns.heatmap(df, cmap = 'viridis')
             plt.title(self.returns.index[t])
             plt.show()
     
-    def plot_cov_feature(self, feature):
-        '''
-        Plots a 1-d feature of the conditional covariance matrices at every
-        time step.
-        Parameters
-        ----------
-        feature : str
-            ['det', 'trace', 'sum'].
-        Returns
-        -------
-        None.
-        '''
-        if feature == 'det':
-            fun = lambda x: np.linalg.det(x)
-        elif feature == 'trace':
-            fun = lambda x: np.trace(x)
-        elif feature == 'sum':
-            fun = lambda x: np.sum(np.sum(x))
-        else:
-            print('{} is not implemented yet!'.format(feature))
-            return None
-        
-        feat = []
-        for t in range(self.returns.shape[0]):
-            feat.append(fun(self.conditional_covariances[t]))
-        plt.plot(self.returns.index, feat)
-        plt.title('{} of Covariance Matrices'.format(feature))
-        plt.show()
-        
     def check_pd(self):
         '''
         Check if every covariance matrix is positive definite
@@ -200,30 +172,58 @@ class CCC():
         bool
         '''
         cond = []
-        for t in tqdm(range(len(self.conditional_covariances))):
-            cond.append(np.all(np.linalg.eigvals(self.conditional_covariances[t])>0))
+        for t in tqdm(range(self.covariances.shape[0])):
+            cond.append(np.all(np.linalg.eigvals(self.covariances[t, :, :])>0))
         return np.all(cond)
+    
+    def visualize_loss_fn(
+            self
+            ):
+        if self.type == 'Constant':
+            print('!!! Only available for Dynamic Correlation !!!')
+        else:
+            N = 25
+            values = []
+            alpha_grid = np.linspace(0, .999, N)
+            beta_grid = np.linspace(0, .99, N)
+            for alpha in tqdm(alpha_grid):
+                tempo = []
+                for beta in beta_grid:
+                    if beta+alpha<.99:
+                        val = dcc_nll((alpha, beta),
+                                      self.volatilities,
+                                      self.returns
+                                      )
+                        if val<2e5:
+                            tempo.append(val)
+                        else:
+                            tempo.append(np.nan)
+                    else:
+                        tempo.append(np.nan)
+                values.append(tempo)
+            values = pd.DataFrame(values,
+                                  columns = beta_grid,
+                                  index = alpha_grid)
 
-        
-# =============================================================================
-#             EXAPMLE CODE
-#     data = pd.read_csv('SMI_data.csv', index_col = 'Date')
-#     data.index = pd.DatetimeIndex(data.index)
-#     
-#     ccc = CCC(data)
-#     ccc.fit()
-#     
-#     sns.heatmap(ccc.P_c, cmap = 'viridis')
-#     plt.title('Constant Correlation')
-#     plt.show()
-#     
-#     ccc.plot_cov_feature('det')
-#     ccc.plot_cov_feature('trace')
-#     ccc.plot_cov_feature('sum')
-#     
-#     ccc.visualize_cov()
-# =============================================================================
-        
+            sns.heatmap(values, vmax=None, cmap='viridis')
+            plt.show()
+
+            fig = go.Figure(data=[go.Surface(colorscale='Viridis',
+                                             z=values.values,
+                                             x = beta_grid,
+                                             y = alpha_grid)])
+            fig.update_layout(
+                scene = dict(
+                    xaxis = dict(
+                        title='beta'),
+                    yaxis = dict(
+                        title='alpha'),
+                    zaxis = dict(
+                        title='DCC Loss Function')
+                    )
+                )
+            plot(fig)
+            
 class DNN(keras.Model):
     
     def __init__(
