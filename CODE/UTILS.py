@@ -18,6 +18,97 @@ pi = tf.constant(math.pi)
 # =============================================================================
 # add:df.set_index(_pd.DatetimeIndex(df.index), inplace = True):line247,history
 # =============================================================================
+def forward_CC(
+        model,
+        test
+        ):
+    '''
+    Forward pass of a CC model
+
+    Parameters
+    ----------
+    model : thesis.CC
+        CC model.
+    test : pd.DataFrame
+        PRCES of the test set.
+
+    Returns
+    -------
+    tuple
+        (covariances, nll).
+
+    '''
+    returns_test = test.pct_change().dropna()
+    volatilities_forward = forward_garch_multi(test, model.data, model.garch_models)
+    covariances_forward =     np.full(
+        (returns_test.shape[0],
+         returns_test.shape[1],
+         returns_test.shape[1]),
+        .0)
+    alpha, beta = model.theta
+    Q_bar = np.divide(returns_test,
+                      volatilities_forward).cov().values
+    Q_t = Q_bar.copy()
+    for t in tqdm(range(returns_test.shape[0])):
+        x_ = returns_test.iloc[t].values.reshape(-1,1)
+        sigma_ = volatilities_forward.iloc[t].values.reshape(-1,1)
+        eps = np.divide(x_, sigma_)
+        
+        Q_t = (1-alpha-beta)*Q_bar+\
+            alpha*eps@eps.transpose()+\
+                beta*Q_t
+        
+        P_t = np.diag(1/np.sqrt(np.diag(Q_t)))@\
+            Q_t@\
+                np.diag(1/np.sqrt(np.diag(Q_t)))
+                
+        Sigma_t = np.diag(sigma_.ravel())@P_t@np.diag(sigma_.ravel())
+                
+        covariances_forward[t, :, :] = Sigma_t
+    return covariances_forward, dcc_nll((alpha, beta),
+                                        volatilities_forward,
+                                        returns_test)
+
+def forward_garch_multi(
+        test,
+        train,
+        fits
+        ):
+    '''
+    Forward pass of 1d garch models for the multidimensional setup.
+
+    Parameters
+    ----------
+    test : pd.DataFrame
+        test set of PRICES of shape (m, d).
+    train : pd.DataFrame
+        train set of PRICES of shape (n, d).
+    fits : dict
+        dictionary with the collected garch models,
+        e.g. model.garch_models.
+
+    Returns
+    -------
+    pd.DataFrame
+        Forwad Conditional Volatilities of shape (m-1, d).
+
+    '''
+    test_volatilities = []
+    for stock in tqdm(range(len(fits))):
+        rets_train = tf.convert_to_tensor(100*train.iloc[:,stock].pct_change().\
+                                          dropna().values.reshape(-1,1),\
+                                              dtype  = 'float32')
+        rets_test = tf.convert_to_tensor(100*test.iloc[:,stock].pct_change().\
+                                         dropna().values.reshape(-1,1),\
+                                             dtype  = 'float32')
+        fit = list(fits.values())[stock]
+        
+        test_volatilities.append(forward_garch(rets_test, rets_train, fit).\
+                       numpy().ravel().tolist())
+    return pd.DataFrame(data = test_volatilities,
+                        columns = test.index[1:],
+                        index = test.columns).transpose()
+
 def take_DCC_cov(
         theta,
         sigma,
@@ -56,9 +147,9 @@ def take_DCC_cov(
             alpha*eps@eps.transpose()+\
                 beta*Q_t
         
-        P_t = np.diag(np.diag(1/np.sqrt(Q_t)))@\
+        P_t = np.diag(1/np.sqrt(np.diag(Q_t)))@\
             Q_t@\
-                np.diag(np.diag(1/np.sqrt(Q_t)))
+                np.diag(1/np.sqrt(np.diag(Q_t)))
                 
         Sigma_t = np.diag(sigma_.ravel())@P_t@np.diag(sigma_.ravel())
                 
@@ -82,10 +173,11 @@ def dcc_nll(
         Q_t = (1-alpha-beta)*Q_bar+\
             alpha*eps@eps.transpose()+\
                 beta*Q_t
+                        
                 
-        P_t = np.diag(np.diag(1/np.sqrt(Q_t)))@\
+        P_t = np.diag(1/np.sqrt(np.diag(Q_t)))@\
             Q_t@\
-                np.diag(np.diag(1/np.sqrt(Q_t)))
+                np.diag(1/np.sqrt(np.diag(Q_t)))
                 
         Sigma_t = np.diag(sigma_.ravel())@P_t@np.diag(sigma_.ravel())
         

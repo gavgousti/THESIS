@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import yfinance as yf
 from UTILS import train_test_split_ts, forward_garch, nll_gb_exp,\
  nll_gb_exp_eval, take_X_y,nll, forward_gjr, forward_egarch, dcc_nll,\
-     take_DCC_cov
+     take_DCC_cov, forward_CC
 import plotly.graph_objects as go
 from plotly.offline import plot
 import pyfiglet
@@ -27,7 +27,7 @@ mpl.rcParams['figure.figsize'] = (18,8)
 plt.style.use('ggplot')
 
 class CC():
-    #TODO: add forward method 
+
     def __init__(
             self,
             prices, 
@@ -54,7 +54,7 @@ class CC():
         None.
 
         '''
-        
+        self.data = prices
         self.returns =scale*prices.pct_change().dropna()
         self.returns -= self.returns.mean()
         self.garch_models  = {}
@@ -93,6 +93,7 @@ class CC():
         self.P_c = np.divide(self.returns, self.volatilities).cov()
         
         if self.type == 'Constant':
+            self.theta = (0,0)
             print('\n• Calculating conditional covariance matrices...')
             for t in tqdm(range(self.returns.shape[0])):
                 Delta = np.diag(self.volatilities.iloc[t])
@@ -108,6 +109,7 @@ class CC():
         elif self.type == 'Dynamic':
             start = time.time()
             print('\n• Optimization for the parameters alpha and beta...\n')
+            #TODO: check if we can add the jacobian to save time
             self.nll_optimization = minimize(
                 fun =  dcc_nll,
                 x0 = (.05, .05),
@@ -115,9 +117,10 @@ class CC():
                 method = 'SLSQP',
                 bounds = [(0,1), (0,1)],
                 constraints = {'type': 'ineq', 'fun': lambda x: 1-x[0]-x[1]},
-                options = {'maxiter': 30, 'disp': True, 'full_output':True}    
+                options = {'maxiter': 30, 'disp': True}    
                 )
             theta = self.nll_optimization.x
+            self.theta = theta
             end = time.time()
             print('\n• Calculating conditional covariance matrices...')
             self.covariances = take_DCC_cov(
@@ -127,14 +130,16 @@ class CC():
                 self.returns
                 )
 
-            print('\n   ➼Time Elapsed for Optimization: {:4.0f}"'\
+            print('\n   ➼Time Elapsed for Optimization: {:3.0f}"'\
                   .format(end-start))
+            
+            self.nll = dcc_nll(theta,
+                               self.volatilities,
+                               self.returns
+                               )
 
-            print('   ➼NLL Value: {:7.0f}'.format(dcc_nll(theta,
-                                                       self.volatilities,
-                                                       self.returns)
-                                               ))
-            print('   ➼alpha, beta = {:1.3f}, {:1.3f}\n'.\
+            print('   ➼NLL Value: {:7.0f}'.format(self.nll))
+            print('   ➼alpha: {:1.3f} | beta: {:1.3f}\n'.\
                   format(theta[0], theta[1]))
         
         plt.plot(self.covariances.sum(1).sum(1)[22:]**.5,
@@ -142,10 +147,13 @@ class CC():
         plt.plot(self.real_covariance.sum(1).sum(1)**.5,
                  label = 'Realized Volatility')
         plt.legend()
-        plt.title('Outputted Volatility Comparison (RMSE: {:3.3f})'.\
-                  format(mse(self.covariances.sum(1).sum(1)[22:]**.5,
-            self.real_covariance.sum(1).sum(1)**.5)**.5))
+        self.rmse_train = mse(self.covariances.sum(1).sum(1)[22:]**.5,
+                              self.real_covariance.sum(1).sum(1)**.5)**.5
+        \
+    plt.title('Outputted Volatility Comparison on Train Set (RMSE: {:3.3f})'.\
+                  format(self.rmse_train))
         plt.show()
+        
 
             
     def visualize_cov(
@@ -223,6 +231,51 @@ class CC():
                     )
                 )
             plot(fig)
+            
+    def evaluation_on_test_set(
+            self,
+            test
+            ):
+        '''
+        Evaluation on a test set.
+
+        Parameters
+        ----------
+        test : pd.DataFrame
+            PRICES on the test set.
+
+        Returns
+        -------
+        dict
+        collection of i-s & o-o-s rmse and nll.
+
+        '''
+        self.covariances_test, nll = forward_CC(self, test)
+        self.real_covariance_test = []
+        returns_test = 100*test.pct_change().dropna()
+        for i in range(22, returns_test.shape[0]):
+            self.real_covariance_test.append(returns_test\
+                                             .iloc[i-22:i, :].cov().values)
+        self.real_covariance_test = np.array(self.real_covariance_test)
+        
+        plt.plot(self.covariances_test.sum(1).sum(1)[22:]**.5,
+                 label = 'Model Volatility')
+        plt.plot(self.real_covariance_test.sum(1).sum(1)**.5,
+                 label = 'Realized Volatility')
+        plt.legend()
+        rmse = mse(self.covariances_test.sum(1).sum(1)[22:]**.5,
+                   self.real_covariance_test.sum(1).sum(1)**.5)**.5
+        \
+    plt.title('Outputted Volatility Comparison on Test Set (RMSE: {:3.3f})'.\
+                  format(rmse))
+        plt.show()
+        return {
+            'RMSE TRAIN SET': self.rmse_train,
+            'NLL TRAIN SET': self.nll,
+            'RMSE TEST SET': rmse,
+            'NLL TEST SET': nll
+            }
+        
             
 class DNN(keras.Model):
     
