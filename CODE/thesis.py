@@ -4,6 +4,7 @@ Created on Mon Mar 28 14:36:51 2022
 
 @author: Giorgio
 """
+#TODO: docstrings
 
 from tensorflow import keras
 from keras.layers import SimpleRNN, Dense, Dropout, BatchNormalization, LSTM
@@ -26,13 +27,88 @@ from arch import arch_model
 mpl.rcParams['figure.figsize'] = (18,8)
 plt.style.use('ggplot')
 
+class GB():
+    
+    def __init__(
+            self,
+            lgbm_params={
+                'max_depth':1,
+                'learning_rate' : .2,
+                'boosting':'gbdt',
+                'num_iterations':50,
+                'force_col_wise ':'true',
+                'early_stopping_round':10,
+                'tree_learner': 'serial' ,
+                'bagging_fraction': 1,
+                'feature_fraction': 1,
+                'extra_trees':'true'
+                },
+            scale = 100,
+            lag = 20
+            ):
+        self.lgbm_params = lgbm_params
+        self.lag = lag
+        
+    def fit(
+            self,
+            rets_train,
+            take_rv = True,
+            log_rv =True,
+            reshape = True
+            ):
+        
+        X_train, y_train = take_X_y(
+            rets_train,
+            self.lag,
+            take_rv = take_rv,
+            log_rv =log_rv,
+            reshape = reshape
+            )
+        
+        lgb_train = lgb.Dataset(
+            X_train,
+            y_train,
+            free_raw_data=False
+            )
+        
+        self.model = lgb.train(
+            params = self.lgbm_params,
+            train_set = lgb_train,
+            valid_sets = lgb_train,
+            feval = nll_gb_exp_eval,
+            fobj  = nll_gb_exp,
+            verbose_eval = False
+        )
+        
+    def predict(
+            self,
+            rets_test,
+            take_rv = True,
+            log_rv =True,
+            reshape = True
+            ):
+        X_test, y_test = take_X_y(
+            rets_test,
+            self.lag,
+            take_rv = take_rv,
+            log_rv =log_rv,
+            reshape = reshape
+            )
+        out = np.exp(self.model.predict(X_test))**.5
+        out_pd = rets_test.copy()
+        out_pd.iloc[-out.shape[0]:] = out
+        out_pd = out_pd.iloc[-out.shape[0]:]
+        del out
+        return out_pd
+ 
 class CC():
 
     def __init__(
             self,
             prices, 
             scale = 100,
-            correlation_type = 'Constant'
+            correlation_type = 'Constant',
+            volatility = 'GARCH'
             ):
         '''
         Conditional Correlation Model
@@ -54,6 +130,7 @@ class CC():
         None.
 
         '''
+        self.vola_type = volatility
         self.data = prices
         self.returns =scale*prices.pct_change().dropna()
         self.returns -= self.returns.mean()
@@ -61,6 +138,7 @@ class CC():
         self.stock_names = self.returns.columns
         self.covariances = []
         self.volatilities = self.returns.copy()-self.returns.copy()
+        self.volatilities = self.volatilities.iloc[41:]
         self.type = correlation_type
         self.real_covariance = []
         
@@ -72,15 +150,35 @@ class CC():
     
     def fit(
             self,
-            volatility = 'GARCH'
             ):
-        
-        #TODO: Extend for more volatility inputs
-        
+        '''
+        Fitting the Constant Correlation model to data:
+            1. Individual conditional volatilities estimation.
+            2. Estimation of the conditional covariance matrices.
+
+        Parameters
+        ----------
+        volatility : str, optional
+            Type of model for individual volatilities. The default is 'GARCH'.
+            So far, available:
+                i) GARCH
+                ii) EGARCH
+                iii) GJR
+                iv) GB
+                v) FNN
+                vi) LSTM
+                
+
+        Returns
+        -------
+        None.
+
+        '''
+                
         print('\nFitting '+self.type+' CC Model...\n'+30*'‾'+'\n')
         
         print('\n• Fitting individual volatility models...')
-        if volatility == 'GARCH':
+        if self.vola_type == 'GARCH':
             for stock in tqdm(self.returns.columns):
                 self.garch_models[stock] = arch_model(self.returns[stock],
                                                   mean = 'Constant',
@@ -88,22 +186,122 @@ class CC():
                                                   p=1,
                                                   q=1).fit(disp = False)
                 self.volatilities[stock]=\
-                    self.garch_models[stock].conditional_volatility.values
-       
-        self.P_c = np.divide(self.returns, self.volatilities).cov()
+                    self.garch_models[stock].conditional_volatility.values[41:]
+        elif self.vola_type == 'EGARCH':
+            for stock in tqdm(self.returns.columns):
+                self.garch_models[stock] = arch_model(self.returns[stock],
+                                                  mean = 'Constant',
+                                                  vol = 'EGARCH',
+                                                  p=1,
+                                                  q=1,
+                                                  o=1).fit(disp = False)
+                self.volatilities[stock]=\
+                    self.garch_models[stock].conditional_volatility.values[41:]
+        elif self.vola_type == 'GJR':
+            for stock in tqdm(self.returns.columns):
+                self.garch_models[stock] = arch_model(self.returns[stock],
+                                                  mean = 'Constant',
+                                                  vol = 'GARCH',
+                                                  p=1,
+                                                  q=1,
+                                                  o=1).fit(disp = False)
+                self.volatilities[stock]=\
+                    self.garch_models[stock].conditional_volatility.values[41:]     
+        elif self.vola_type == 'GB':
+            for stock in tqdm(self.returns.columns):
+                self.garch_models[stock] = GB()
+                self.garch_models[stock].fit(self.returns[stock])
+                self.volatilities[stock]=\
+                self.garch_models[stock].predict(self.returns[stock]).values
+                
+        elif self.vola_type == 'FNN':
+            for stock in tqdm(self.returns.columns):
+                self.garch_models[stock] = DNN(
+                    hidden_size = [300,],
+                    dropout = .5,
+                    l1 = 1,
+                    l2 = 1
+                    )
+                lag =20
+                X_train, y_train = take_X_y(self.returns[stock],
+                                            lag,
+                                            reshape = True,
+                                            take_rv = True,
+                                            log_rv =True)
+
+                X_train, y_train = tf.convert_to_tensor(
+                    X_train,
+                    dtype  = 'float32'
+                    ),\
+                    tf.convert_to_tensor(
+                        y_train,
+                        dtype  = 'float32'
+                        )
+                                        
+                self.garch_models[stock].train(
+                    X_train,
+                    y_train,
+                    X_train,
+                    y_train,
+                    epochs = 20,
+                    bs = 1024,
+                    lr = 1e-3
+                    )
+                self.volatilities[stock]=\
+                    self.garch_models[stock](X_train).numpy().ravel()
+                    
+        elif self.vola_type == 'LSTM':
+            for stock in tqdm(self.returns.columns):
+                self.garch_models[stock] = RNN(
+                    lstm = True,
+                    hidden_size=[60,],
+                    l1 = 0                  
+                    )
+                lag =20
+                X_train, y_train = take_X_y(self.returns[stock],
+                                            lag,
+                                            reshape = False,
+                                            take_rv = True,
+                                            log_rv =True)
+
+                X_train, y_train = tf.convert_to_tensor(
+                    X_train,
+                    dtype  = 'float32'
+                    ),\
+                    tf.convert_to_tensor(
+                        y_train,
+                        dtype  = 'float32'
+                        )
+                    
+                self.garch_models[stock].train(
+                    X_train, 
+                    y_train,
+                    X_train,
+                    y_train,
+                    epochs = 10,
+                    bs = 512,
+                    lr = .008
+                )
+                
+                self.volatilities[stock]=\
+                    self.garch_models[stock](X_train).numpy().ravel()
+                    
+        self.P_c = np.divide(self.returns.iloc[41:],
+                             self.volatilities).cov()
         
         if self.type == 'Constant':
             self.theta = (0,0)
             print('\n• Calculating conditional covariance matrices...')
-            for t in tqdm(range(self.returns.shape[0])):
-                Delta = np.diag(self.volatilities.iloc[t])
+            for t in tqdm(range(41, self.returns.shape[0])):
+                Delta = np.diag(self.volatilities.iloc[t-41])
                 cov = Delta@self.P_c@Delta
                 self.covariances.append(cov)
                 del cov
             self.covariances = np.array(self.covariances)
                 
             print('\n• Calculating NLL...')
-            self.nll = dcc_nll((0,0), self.volatilities, self.returns)
+            self.nll = dcc_nll((0,0), self.volatilities, self.returns.\
+                               iloc[41:])
             print('NLL: {:6.0f}'.format(self.nll))
         
         elif self.type == 'Dynamic':
@@ -113,11 +311,11 @@ class CC():
             self.nll_optimization = minimize(
                 fun =  dcc_nll,
                 x0 = (.05, .05),
-                args = (self.volatilities, self.returns),
+                args = (self.volatilities, self.returns.iloc[41:]),
                 method = 'SLSQP',
                 bounds = [(0,1), (0,1)],
                 constraints = {'type': 'ineq', 'fun': lambda x: 1-x[0]-x[1]},
-                options = {'maxiter': 30, 'disp': True}    
+                options = {'maxiter': 60, 'disp': True}    
                 )
             theta = self.nll_optimization.x
             self.theta = theta
@@ -127,7 +325,7 @@ class CC():
                 theta,
                 self.volatilities,
                 self.P_c,
-                self.returns
+                self.returns.iloc[41:]
                 )
 
             print('\n   ➼Time Elapsed for Optimization: {:3.0f}"'\
@@ -135,7 +333,7 @@ class CC():
             
             self.nll = dcc_nll(theta,
                                self.volatilities,
-                               self.returns
+                               self.returns.iloc[41:]
                                )
 
             print('   ➼NLL Value: {:7.0f}'.format(self.nll))
@@ -144,14 +342,14 @@ class CC():
         
         plt.plot(self.covariances.sum(1).sum(1)[22:]**.5,
                  label = 'Model Volatility')
-        plt.plot(self.real_covariance.sum(1).sum(1)**.5,
+        plt.plot(self.real_covariance[41:].sum(1).sum(1)**.5,
                  label = 'Realized Volatility')
         plt.legend()
         self.rmse_train = mse(self.covariances.sum(1).sum(1)[22:]**.5,
-                              self.real_covariance.sum(1).sum(1)**.5)**.5
+                              self.real_covariance[41:].sum(1).sum(1)**.5)**.5
         \
-    plt.title('Outputted Volatility Comparison on Train Set (RMSE: {:3.3f})'.\
-                  format(self.rmse_train))
+    plt.title('{} CC - {} | Evaluation on Train Set (RMSE: {:3.3f})'.\
+                  format(self.type, self.vola_type, self.rmse_train))
         plt.show()
         
 
@@ -200,7 +398,7 @@ class CC():
                     if beta+alpha<.99:
                         val = dcc_nll((alpha, beta),
                                       self.volatilities,
-                                      self.returns
+                                      self.returns.iloc[41:]
                                       )
                         if val<2e5:
                             tempo.append(val)
@@ -256,7 +454,7 @@ class CC():
         for i in range(22, returns_test.shape[0]):
             self.real_covariance_test.append(returns_test\
                                              .iloc[i-22:i, :].cov().values)
-        self.real_covariance_test = np.array(self.real_covariance_test)
+        self.real_covariance_test = np.array(self.real_covariance_test)[41:]
         
         plt.plot(self.covariances_test.sum(1).sum(1)[22:]**.5,
                  label = 'Model Volatility')
@@ -265,15 +463,19 @@ class CC():
         plt.legend()
         rmse = mse(self.covariances_test.sum(1).sum(1)[22:]**.5,
                    self.real_covariance_test.sum(1).sum(1)**.5)**.5
-        \
-    plt.title('Outputted Volatility Comparison on Test Set (RMSE: {:3.3f})'.\
-                  format(rmse))
+        
+        plt.title('{} CC - {} | Evaluation on Test Set (RMSE: {:3.3f})'.\
+                      format(self.type, self.vola_type, rmse))
+
         plt.show()
         return {
+            'MODEL': self.type+' CC - '+self.vola_type,
             'RMSE TRAIN SET': self.rmse_train,
             'NLL TRAIN SET': self.nll,
             'RMSE TEST SET': rmse,
-            'NLL TEST SET': nll
+            'NLL TEST SET': nll,
+            'alpha': self.theta[0],
+            'beta': self.theta[1]
             }
         
             
@@ -313,23 +515,29 @@ class DNN(keras.Model):
         epochs,
         bs,
         lr
-    ):
+    ):                                
         self.loss_train = []; self.loss_val = []
         self.compile(optimizer = tf.keras.optimizers.Adam(lr), loss = nll)
         for epoch in tqdm(range(1, epochs+1)):
-            for i in range(X_train.shape[0]//bs):
+            for i in range(X_train.shape[0]//bs+1):
                 X_, y_ = X_train[i*bs: i*bs+bs], y_train[i*bs: i*bs+bs]
-                if i ==X_train.shape[0]//bs-1:
-                    X_, y_ = X_train[i*bs+bs:X_train.shape[0]], y_train[i*bs+bs:X_train.shape[0]]
+                if i ==X_train.shape[0]//bs:
+                    if X_train.shape[0]==bs:
+                        break
+                    X_, y_ = X_train[i*bs:X_train.shape[0]],\
+                        y_train[i*bs:X_train.shape[0]]
                 with tf.GradientTape() as tape:
                     logits = self(X_)
                     loss = nll((logits)**2, y_)
                 gradients = tape.gradient(loss, self.trainable_weights)
-                self.optimizer.apply_gradients(zip(gradients, self.trainable_weights))
+                self.optimizer.apply_gradients(zip(gradients,
+                                                   self.trainable_weights))
             self.loss_train.append(nll(self(X_train)**2, y_train))
             self.loss_val.append(nll(self(X_test)**2, y_test))
             if epoch%5==0:
-                print('EPOCH: {}\n'.format(epoch)+30*'-'+'\nTRAIN LOSS: {:5.0f}\nTEST LOSS: {:5.0f}'\
+                print('EPOCH: {}\n'.\
+                      format(epoch)+30*'-'\
+                          +'\nTRAIN LOSS: {:5.0f}\nTEST LOSS: {:5.0f}'\
                       .format(self.loss_train[-1], self.loss_val[-1]))
                 print(30*'=')
     
@@ -390,10 +598,12 @@ class RNN(keras.Model):
         self.loss_train = []; self.loss_val = []
         self.compile(optimizer = tf.keras.optimizers.Adam(lr), loss = nll)
         for epoch in tqdm(range(1, epochs+1)):
-            for i in range(X_train.shape[0]//bs):
+            for i in range(X_train.shape[0]//bs+1):
                 X_, y_ = X_train[i*bs: i*bs+bs], y_train[i*bs: i*bs+bs]
-                if i ==X_train.shape[0]//bs-1:
-                    X_, y_ = X_train[i*bs+bs:X_train.shape[0]], y_train[i*bs+bs:X_train.shape[0]]
+                if i ==X_train.shape[0]//bs:
+                    if X_train.shape[0]==bs:
+                        break
+                    X_, y_ = X_train[i*bs:X_train.shape[0]], y_train[i*bs:X_train.shape[0]]
                 with tf.GradientTape() as tape:
                     logits = self(X_)
                     loss = nll((logits)**2, y_)
@@ -871,5 +1081,18 @@ def output1(output_file =  r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Fi
                      gb['GJR RMSE'], gb['EGARCH RMSE']])
         nll_results.append(nll)
         rmse_results.append(rmse)
+        
+    rmse_table = pd.DataFrame([rmse_results[i][0] for i in \
+                                 range(len(rmse_results))],
+                 columns = ['Index', 'RNN', 'LSTM', 'FNN', \
+                            'GB', 'GARCH', 'GJR', 'EGARCH'])\
+        .set_index('Index')
+    
+    nll_table = pd.DataFrame([nll_results[i][0] for i in \
+                                 range(len(nll_results))],
+                 columns = ['Index', 'RNN', 'LSTM', 'FNN', \
+                            'GB', 'GARCH', 'GJR', 'EGARCH'])\
+        .set_index('Index')
 
-    return nll_results, rmse_results
+    return nll_table, rmse_table
+

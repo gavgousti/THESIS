@@ -4,6 +4,7 @@ Created on Mon Mar 28 14:40:00 2022
 
 @author: Giorgio
 """
+# TODO: docstrings
 
 import tensorflow as tf, tensorflow.math as m, numpy as np, pandas as pd
 import math 
@@ -12,12 +13,10 @@ from arch import arch_model
 from tqdm import tqdm
 pi = tf.constant(math.pi)
 
-
-
-
 # =============================================================================
 # add:df.set_index(_pd.DatetimeIndex(df.index), inplace = True):line247,history
 # =============================================================================
+
 def forward_CC(
         model,
         test
@@ -39,19 +38,25 @@ def forward_CC(
 
     '''
     returns_test = test.pct_change().dropna()
-    volatilities_forward = forward_garch_multi(test, model.data, model.garch_models)
-    covariances_forward =     np.full(
+    volatilities_forward = forward_garch_multi(
+        test,
+        model.data,
+        model.garch_models,
+        model.vola_type
+        )
+    covariances_forward = np.full(
         (returns_test.shape[0],
          returns_test.shape[1],
          returns_test.shape[1]),
-        .0)
+        .0
+        )
     alpha, beta = model.theta
-    Q_bar = np.divide(returns_test,
+    Q_bar = np.divide(returns_test.iloc[41:],
                       volatilities_forward).cov().values
     Q_t = Q_bar.copy()
-    for t in tqdm(range(returns_test.shape[0])):
+    for t in tqdm(range(41, returns_test.shape[0])):
         x_ = returns_test.iloc[t].values.reshape(-1,1)
-        sigma_ = volatilities_forward.iloc[t].values.reshape(-1,1)
+        sigma_ = volatilities_forward.iloc[t-41].values.reshape(-1,1)
         eps = np.divide(x_, sigma_)
         
         Q_t = (1-alpha-beta)*Q_bar+\
@@ -65,14 +70,15 @@ def forward_CC(
         Sigma_t = np.diag(sigma_.ravel())@P_t@np.diag(sigma_.ravel())
                 
         covariances_forward[t, :, :] = Sigma_t
-    return covariances_forward, dcc_nll((alpha, beta),
+    return covariances_forward[41:], dcc_nll((alpha, beta),
                                         volatilities_forward,
-                                        returns_test)
+                                        returns_test.iloc[41:])
 
 def forward_garch_multi(
         test,
         train,
-        fits
+        fits,
+        vola_type
         ):
     '''
     Forward pass of 1d garch models for the multidimensional setup.
@@ -86,6 +92,8 @@ def forward_garch_multi(
     fits : dict
         dictionary with the collected garch models,
         e.g. model.garch_models.
+    vola_type: str
+        type of volatility model {'GARCH', 'EGARCH', 'GJR'}
 
     Returns
     -------
@@ -94,19 +102,55 @@ def forward_garch_multi(
 
     '''
     test_volatilities = []
-    for stock in tqdm(range(len(fits))):
-        rets_train = tf.convert_to_tensor(100*train.iloc[:,stock].pct_change().\
-                                          dropna().values.reshape(-1,1),\
-                                              dtype  = 'float32')
-        rets_test = tf.convert_to_tensor(100*test.iloc[:,stock].pct_change().\
-                                         dropna().values.reshape(-1,1),\
-                                             dtype  = 'float32')
-        fit = list(fits.values())[stock]
+    if vola_type=='GARCH':
+        forward_1d = forward_garch
+    elif vola_type=='EGARCH':
+        forward_1d = forward_egarch 
+    elif vola_type=='GJR':
+        forward_1d = forward_gjr
+    #TODO: GB, etc
         
-        test_volatilities.append(forward_garch(rets_test, rets_train, fit).\
-                       numpy().ravel().tolist())
+    for stock in tqdm(range(len(fits))):
+        
+        fit = list(fits.values())[stock]
+
+        if vola_type == 'GB':
+            rets_test = 100*test.iloc[:, stock].pct_change().dropna()
+            test_volatilities.append(fit.predict(rets_test).values.\
+                                     tolist())
+        
+        elif vola_type == 'FNN' or vola_type == 'LSTM':
+            rets_test = 100*test.iloc[:, stock].pct_change().dropna()
+            lag =20
+            X_test, y_test = take_X_y(rets_test,
+                                        lag,
+                                        reshape = vola_type=='FNN',
+                                        take_rv = True,
+                                        log_rv =True)
+
+            X_test, y_test = tf.convert_to_tensor(
+                X_test,
+                dtype  = 'float32'
+                ),\
+                tf.convert_to_tensor(
+                    y_test,
+                    dtype  = 'float32'
+                    )
+            test_volatilities.append(fit(X_test).numpy().ravel().tolist())
+        
+        elif vola_type in ['GARCH', 'EGARCH', 'GJR']:            
+            rets_train = tf.convert_to_tensor(100*train.iloc[:,stock].pct_change().\
+                                              dropna().values.reshape(-1,1),\
+                                                  dtype  = 'float32')
+            rets_test = tf.convert_to_tensor(100*test.iloc[:,stock].pct_change().\
+                                             dropna().values.reshape(-1,1),\
+                                                 dtype  = 'float32')
+                
+            test_volatilities.append(forward_1d(rets_test, rets_train, fit).\
+                           numpy().ravel().tolist()[41:])
+                
     return pd.DataFrame(data = test_volatilities,
-                        columns = test.index[1:],
+                        columns = test.index[42:],
                         index = test.columns).transpose()
 
 def take_DCC_cov(
@@ -138,9 +182,9 @@ def take_DCC_cov(
     alpha, beta = theta
     Q_bar = np.divide(x, sigma).cov().values
     Q_t = Q_bar.copy()
-    for t in tqdm(range(x.shape[0])):
-        x_ = x.iloc[t].values.reshape(-1,1)
-        sigma_ = sigma.iloc[t].values.reshape(-1,1)
+    for t in tqdm(range(1, x.shape[0])):
+        x_ = x.iloc[t-1].values.reshape(-1,1)
+        sigma_ = sigma.iloc[t-1].values.reshape(-1,1)
         eps = np.divide(x_, sigma_)
         
         Q_t = (1-alpha-beta)*Q_bar+\
@@ -165,9 +209,9 @@ def dcc_nll(
     Q_bar = np.divide(x, sigma).cov().values
     Q_t = Q_bar.copy()
     nll = 0
-    for t in range(x.shape[0]):
-        x_ = x.iloc[t].values.reshape(-1,1)
-        sigma_ = sigma.iloc[t].values.reshape(-1,1)
+    for t in range(1, x.shape[0]):
+        x_ = x.iloc[t-1].values.reshape(-1,1)
+        sigma_ = sigma.iloc[t-1].values.reshape(-1,1)
         eps = np.divide(x_, sigma_)
         
         Q_t = (1-alpha-beta)*Q_bar+\
