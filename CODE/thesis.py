@@ -896,6 +896,8 @@ def deployment_GB_1d(
     rets = 100*(prices.pct_change().dropna())
     rets_train, rets_test = train_test_split_ts(rets, .7)
     
+    print(rets)
+    
     X_train, y_train = take_X_y(rets_train, lag, take_rv = include_rv, log_rv =include_rv, reshape = True )
     X_test, y_test = take_X_y(rets_test, lag, take_rv = include_rv, log_rv =include_rv, reshape = True)
     lgb_train, lgb_test = lgb.Dataset(X_train, y_train, free_raw_data=False ),\
@@ -944,6 +946,8 @@ def deployment_GB_1d(
     fit = garch.fit(disp = False)
     g_vol = fit.conditional_volatility
     
+    print(fit)
+    
     plt.plot(g_vol)
     plt.title('GARCH')
     plt.show()
@@ -956,6 +960,8 @@ def deployment_GB_1d(
     fit_gjr = gjr.fit(disp = False)
     g_vol_gjr= fit_gjr.conditional_volatility
     
+    print(fit_gjr)
+    
     plt.plot(g_vol_gjr)
     plt.title('GJR')
     plt.show()
@@ -967,6 +973,8 @@ def deployment_GB_1d(
     egarch = arch_model(lgb_train.get_label(), mean = 'Constant', vol = 'EGARCH', p=1, q=1, o=1)
     fit_egarch = egarch.fit(disp = False)
     g_vol_egarch = fit_egarch.conditional_volatility
+    
+    print(fit_egarch)
     
     plt.plot(g_vol_egarch)
     plt.title('EGARCH')
