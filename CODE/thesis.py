@@ -753,6 +753,7 @@ def deployment_RNN_1d(
     print('Garch NLL: {:6.0f}'.format(nll(g_vola_pred**2, y_test)))
     print('Garch RMSE: {:1.3f}'.format(mse(np.exp(X_test[:,-1,1]), g_vola_pred.numpy().ravel())**.5))
     return {'name': txt+'__'+index,
+            'sigma-r': [out_test, y_test],
             'NLL': nll(out_test**2, y_test), 
             'RMSE': mse(np.exp(X_test[:,-1,1]), out_test.numpy().ravel())**.5}
 
@@ -795,7 +796,7 @@ def deployment_DNN_1d(
     
     model = DNN(
         hidden_size = [300],
-        dropout = .5,
+        dropout = .0,
         l1 = 1,
         l2 = 1
     )
@@ -866,7 +867,9 @@ def deployment_DNN_1d(
     
     return {'name': 'FNN__'+index,
             'NLL': nll(out_test**2, y_test),
-            'RMSE': mse(np.exp(X_test[:,-1]), out_test.numpy().ravel())**.5}
+            'RMSE': mse(np.exp(X_test[:,-1]), out_test.numpy().ravel())**.5,
+            'sigma-r': [out_test, y_test]
+            }
         
 def deployment_GB_1d(
         index = '^GSPC',
@@ -1047,14 +1050,19 @@ def deployment_GB_1d(
     print('Egarch RMSE: {:1.3f}'.format(mse(g_vola_pred_egarch, np.exp(X_test[:,-1]))**.5))
     
     return {'name': 'GB__'+index,
+            'sigma-r': [model.predict(X_test), lgb_test.get_label()],
             'NLL': nll_gb_exp_eval(model.predict(X_test), lgb_test)[1],
             'RMSE': mse(np.exp(model.predict(X_test))**.5, np.exp(X_test[:,-1]))**.5,
             'GARCH NLL': nll_gb_exp_eval(np.log(g_vola_pred**2), lgb_test)[1],
             'GARCH RMSE': mse(g_vola_pred, np.exp(X_test[:,-1]))**.5,
+            'GARCH sigma-r': (np.log(g_vola_pred), lgb_test.get_label()),
             'GJR NLL': nll_gb_exp_eval(np.log(g_vola_pred_gjr**2), lgb_test)[1],
             'GJR RMSE': mse(g_vola_pred_gjr, np.exp(X_test[:,-1]))**.5,
+            'GJR sigma-r': [np.log(g_vola_pred_gjr), lgb_test.get_label()],
             'EGARCH NLL': nll_gb_exp_eval(np.log(g_vola_pred_egarch**2), lgb_test)[1],
-            'EGARCH RMSE': mse(g_vola_pred_egarch, np.exp(X_test[:,-1]))**.5
+            'EGARCH RMSE': mse(g_vola_pred_egarch, np.exp(X_test[:,-1]))**.5,
+            'EGARCH sigma-r': [np.log(g_vola_pred_egarch), lgb_test.get_label()],
+            'RV': np.exp(X_test[:,-1])
             }
 
     
@@ -1104,3 +1112,4 @@ def output1(output_file =  r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Fi
 
     return nll_table, rmse_table
 
+    
