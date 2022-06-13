@@ -633,7 +633,8 @@ def deployment_RNN_1d(
         lag = 20,
         include_rv = True,
         save = None,
-        returns_file = None
+        returns_file = False,
+        file = None
         ):
     """
     # TBA
@@ -656,12 +657,12 @@ def deployment_RNN_1d(
     None.
     """
     
-    if returns_file == None:
+    if not returns_file:
         prices = yf.Ticker(index).history(start = start_date).Close
         rets = 100*(prices.pct_change().dropna())
     else:
-        rets = returns_file
-        index = returns_file.name
+        rets = file
+        index = file.name
 
         
     rets_train, rets_test = train_test_split_ts(rets, .7)
@@ -794,12 +795,12 @@ def deployment_DNN_1d(
     None.
     """
     
-    if returns_file == None:
+    if not returns_file:
         prices = yf.Ticker(index).history(start = start_date).Close
         rets = 100*(prices.pct_change().dropna())
     else:
-        rets = returns_file
-        index = returns_file.name
+        rets = file
+        index = file.name
 
         
     rets_train, rets_test = train_test_split_ts(rets, .7)
@@ -896,7 +897,8 @@ def deployment_GB_1d(
         lag = 20,
         include_rv = True,
         save = None,
-        returns_file = None
+        returns_file = False,
+        file = None
         ):
     """
     TBA
@@ -914,12 +916,12 @@ def deployment_GB_1d(
     -------
     None.
     """
-    if returns_file == None:
+    if not returns_file:
         prices = yf.Ticker(index).history(start = start_date).Close
         rets = 100*(prices.pct_change().dropna())
     else:
-        rets = returns_file
-        index = returns_file.name
+        rets = file
+        index = file.name
         
     rets_train, rets_test = train_test_split_ts(rets, .7)
 
