@@ -23,6 +23,7 @@ import pyfiglet
 from sklearn.metrics import mean_squared_error as mse
 import lightgbm as lgb
 from arch import arch_model
+from time import time as now
 
 mpl.rcParams['figure.figsize'] = (18,8)
 plt.style.use('ggplot')
@@ -631,7 +632,8 @@ def deployment_RNN_1d(
         start_date = '2000-01-01',
         lag = 20,
         include_rv = True,
-        save = None
+        save = None,
+        returns_file = None
         ):
     """
     # TBA
@@ -654,8 +656,14 @@ def deployment_RNN_1d(
     None.
     """
     
-    prices = yf.Ticker(index).history(start = start_date).Close
-    rets = 100*(prices.pct_change().dropna())
+    if returns_file == None:
+        prices = yf.Ticker(index).history(start = start_date).Close
+        rets = 100*(prices.pct_change().dropna())
+    else:
+        rets = returns_file
+        index = returns_file.name
+
+        
     rets_train, rets_test = train_test_split_ts(rets, .7)
     X_train, y_train = take_X_y(rets_train, lag, reshape = False, take_rv = include_rv, log_rv =include_rv )
     X_test, y_test = take_X_y(rets_test, lag, reshape = False, take_rv = include_rv, log_rv =include_rv)
@@ -676,6 +684,7 @@ def deployment_RNN_1d(
         l2 = 0
     )
     
+    time_ = -now()
     model.train(
         X_train, 
         y_train,
@@ -685,6 +694,7 @@ def deployment_RNN_1d(
         bs = 2048,
         lr = .008
     )
+    time_+=now()
     
     model.plot_loss()
     
@@ -753,9 +763,9 @@ def deployment_RNN_1d(
     print('Garch NLL: {:6.0f}'.format(nll(g_vola_pred**2, y_test)))
     print('Garch RMSE: {:1.3f}'.format(mse(np.exp(X_test[:,-1,1]), g_vola_pred.numpy().ravel())**.5))
     return {'name': txt+'__'+index,
-            'sigma-r': [out_test, y_test],
             'NLL': nll(out_test**2, y_test), 
-            'RMSE': mse(np.exp(X_test[:,-1,1]), out_test.numpy().ravel())**.5}
+            'RMSE': mse(np.exp(X_test[:,-1,1]), out_test.numpy().ravel())**.5,
+            'TIME': time_}
 
 
 def deployment_DNN_1d(
@@ -763,7 +773,9 @@ def deployment_DNN_1d(
         start_date = '2000-01-01',
         lag = 20,
         include_rv = True,
-        save = None
+        save = None,
+        returns_file = False,
+        file = None
         ):
     """
     
@@ -782,8 +794,14 @@ def deployment_DNN_1d(
     None.
     """
     
-    prices = yf.Ticker(index).history(start = start_date).Close
-    rets = 100*(prices.pct_change().dropna())
+    if returns_file == None:
+        prices = yf.Ticker(index).history(start = start_date).Close
+        rets = 100*(prices.pct_change().dropna())
+    else:
+        rets = returns_file
+        index = returns_file.name
+
+        
     rets_train, rets_test = train_test_split_ts(rets, .7)
     X_train, y_train = take_X_y(rets_train, lag, reshape = True, take_rv = include_rv, log_rv =include_rv )
     X_test, y_test = take_X_y(rets_test, lag, reshape = True, take_rv = include_rv, log_rv =include_rv)
@@ -796,11 +814,12 @@ def deployment_DNN_1d(
     
     model = DNN(
         hidden_size = [300],
-        dropout = .0,
+        dropout = .5,
         l1 = 1,
         l2 = 1
     )
     
+    time_ = -now()
     model.train(
         X_train, 
         y_train,
@@ -810,6 +829,7 @@ def deployment_DNN_1d(
         bs = 1024,
         lr = .001,
     )
+    time_ += now()
     
     model.plot_loss()
     
@@ -868,15 +888,15 @@ def deployment_DNN_1d(
     return {'name': 'FNN__'+index,
             'NLL': nll(out_test**2, y_test),
             'RMSE': mse(np.exp(X_test[:,-1]), out_test.numpy().ravel())**.5,
-            'sigma-r': [out_test, y_test]
-            }
+            'TIME': time_}
         
 def deployment_GB_1d(
         index = '^GSPC',
         start_date = '2000-01-01',
         lag = 20,
         include_rv = True,
-        save = None
+        save = None,
+        returns_file = None
         ):
     """
     TBA
@@ -894,11 +914,15 @@ def deployment_GB_1d(
     -------
     None.
     """
-    
-    prices = yf.Ticker(index).history(start = start_date).Close
-    rets = 100*(prices.pct_change().dropna())
+    if returns_file == None:
+        prices = yf.Ticker(index).history(start = start_date).Close
+        rets = 100*(prices.pct_change().dropna())
+    else:
+        rets = returns_file
+        index = returns_file.name
+        
     rets_train, rets_test = train_test_split_ts(rets, .7)
-    
+
     print(rets)
     
     X_train, y_train = take_X_y(rets_train, lag, take_rv = include_rv, log_rv =include_rv, reshape = True )
@@ -919,6 +943,7 @@ def deployment_GB_1d(
         'extra_trees':'true'
     }
     
+    time_gb = -now()
     model = lgb.train(
         params = lgbm_params,
         train_set = lgb_train,
@@ -927,6 +952,7 @@ def deployment_GB_1d(
         feval = nll_gb_exp_eval,
         verbose_eval = False
     )
+    time_gb+=now()
     
     print(60*'*')
     print(pyfiglet.figlet_format("             MODEL\nEVALUATION"))
@@ -946,7 +972,9 @@ def deployment_GB_1d(
 # =============================================================================
     
     garch = arch_model(lgb_train.get_label(), mean = 'Constant', vol = 'GARCH', p=1, q=1)
+    time_garch = -now()
     fit = garch.fit(disp = False)
+    time_garch+=now()
     g_vol = fit.conditional_volatility
     
     print(fit)
@@ -960,7 +988,10 @@ def deployment_GB_1d(
 #     GJR
 # =============================================================================
     gjr = arch_model(lgb_train.get_label(), mean = 'Constant', vol = 'GARCH', p=1, q=1, o=1)
+    time_gjr = -now()
     fit_gjr = gjr.fit(disp = False)
+    time_gjr+=now()
+    
     g_vol_gjr= fit_gjr.conditional_volatility
     
     print(fit_gjr)
@@ -974,7 +1005,9 @@ def deployment_GB_1d(
 #     EGARCH
 # =============================================================================
     egarch = arch_model(lgb_train.get_label(), mean = 'Constant', vol = 'EGARCH', p=1, q=1, o=1)
+    time_egarch = -now()
     fit_egarch = egarch.fit(disp = False)
+    time_egarch+=now()
     g_vol_egarch = fit_egarch.conditional_volatility
     
     print(fit_egarch)
@@ -1050,19 +1083,16 @@ def deployment_GB_1d(
     print('Egarch RMSE: {:1.3f}'.format(mse(g_vola_pred_egarch, np.exp(X_test[:,-1]))**.5))
     
     return {'name': 'GB__'+index,
-            'sigma-r': [model.predict(X_test), lgb_test.get_label()],
             'NLL': nll_gb_exp_eval(model.predict(X_test), lgb_test)[1],
             'RMSE': mse(np.exp(model.predict(X_test))**.5, np.exp(X_test[:,-1]))**.5,
             'GARCH NLL': nll_gb_exp_eval(np.log(g_vola_pred**2), lgb_test)[1],
             'GARCH RMSE': mse(g_vola_pred, np.exp(X_test[:,-1]))**.5,
-            'GARCH sigma-r': (np.log(g_vola_pred), lgb_test.get_label()),
             'GJR NLL': nll_gb_exp_eval(np.log(g_vola_pred_gjr**2), lgb_test)[1],
             'GJR RMSE': mse(g_vola_pred_gjr, np.exp(X_test[:,-1]))**.5,
-            'GJR sigma-r': [np.log(g_vola_pred_gjr), lgb_test.get_label()],
             'EGARCH NLL': nll_gb_exp_eval(np.log(g_vola_pred_egarch**2), lgb_test)[1],
             'EGARCH RMSE': mse(g_vola_pred_egarch, np.exp(X_test[:,-1]))**.5,
-            'EGARCH sigma-r': [np.log(g_vola_pred_egarch), lgb_test.get_label()],
-            'RV': np.exp(X_test[:,-1])
+            'TIME GB': time_gb, 'TIME GARCH': time_garch, 'TIME GJR': time_gjr,
+            'TIME EGARCH': time_egarch
             }
 
     
@@ -1112,4 +1142,3 @@ def output1(output_file =  r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Fi
 
     return nll_table, rmse_table
 
-    
