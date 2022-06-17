@@ -16,7 +16,82 @@ pi = tf.constant(math.pi)
 # =============================================================================
 # add:df.set_index(_pd.DatetimeIndex(df.index), inplace = True):line247,history
 # =============================================================================
+def create_dataset(paths, closeout = 10):
+    '''
+    Function that takes the simulated paths of the DCC and transforms it to 
+    the log returns with a specified lag.
 
+    Parameters
+    ----------
+    paths : pd.DataFrame
+        Data frame of shape (simulations, horizon). The portfolio paths
+    closeout : int, optional
+        The closeout period for the model. The default is 10.
+
+    Returns
+    -------
+    pd.DataFrame
+        The transformed log returns.
+
+    '''
+    output = []
+    paths = np.log(paths)
+    for t in range(0, paths.shape[1]-closeout):
+        output.append((paths.iloc[t+closeout]-paths.iloc[t]))
+    return pd.DataFrame(output)
+
+
+def simulate_garch(
+        params,
+        simulations = 100,
+        horizon = 10
+        ):
+    '''
+    Function that simulates GARCH paths.
+
+    Parameters
+    ----------
+    params : tuple
+        Garch parameters: omega, alpha, beta.
+    simulations : int, optional
+        Number of simulated paths. The default is 100.
+    horizon : int, optional
+        Time horizon for every path. The default is 10.
+
+    Returns
+    -------
+    dict
+        A dictionary with keys "Volatilities" and "Residuals" with the
+        simulated volatilities and residuals respectively.
+
+    '''
+    omega, alpha, beta = params.omega, params['alpha[1]'], params['beta[1]']
+    output_vola = []
+    output_res = []
+    for _ in range(simulations):
+        # print(omega/(1-alpha-beta+1e-3))
+        vola_path = [np.sqrt(omega/(1-alpha-beta))]
+        r = np.random.randn()*vola_path[-1]
+        res = [r/vola_path[-1]]
+        for _ in range(horizon):
+            vola_path.append(np.sqrt(omega\
+                                     +alpha*(r/vola_path[-1])**2\
+                                         +beta*vola_path[-1]**2))
+            r = np.random.randn()*vola_path[-1]
+            res.append(r/vola_path[-1])
+        output_vola.append(vola_path)
+        output_res.append(res)
+    output_vola =  pd.DataFrame(output_vola, columns=['h'+str(i) for i in range(horizon+1)])
+    output_res =  pd.DataFrame(output_res, columns=['h'+str(i) for i in range(horizon+1)])
+    return {'Volatilities': output_vola,
+            'Residuals': output_res}
+
+def cov_to_corr(Q_t):
+        P_t = np.diag(1/np.sqrt(np.diag(Q_t)))@\
+            Q_t@\
+                np.diag(1/np.sqrt(np.diag(Q_t)))
+        return P_t
+    
 def forward_CC(
         model,
         test

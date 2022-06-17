@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import yfinance as yf
 from UTILS import train_test_split_ts, forward_garch, nll_gb_exp,\
  nll_gb_exp_eval, take_X_y,nll, forward_gjr, forward_egarch, dcc_nll,\
-     take_DCC_cov, forward_CC
+     take_DCC_cov, forward_CC, simulate_garch, cov_to_corr
 import plotly.graph_objects as go
 from plotly.offline import plot
 import pyfiglet
@@ -478,6 +478,49 @@ class CC():
             'alpha': self.theta[0],
             'beta': self.theta[1]
             }
+    
+    def DCC_GARCH_simulation(
+        self,
+        simulations =1000,
+        horizon = 255
+        ):
+    
+        w = np.ones((len(self.stock_names),1))
+        alpha, beta = self.theta
+        portf_val = len(self.stock_names)*np.ones((horizon,1))
+        for _ in tqdm(range(simulations)):
+        
+            one_d_volatilities = []; one_d_residuals = []
+            for i in range(len(self.stock_names)):
+                temp = simulate_garch(self.garch_models[self.stock_names[i]].params,
+                                      simulations = 1,
+                                      horizon =horizon)
+                one_d_volatilities.append(temp['Volatilities'].values.ravel().tolist())
+                one_d_residuals.append(temp['Residuals'].values.ravel().tolist())
+            one_d_volatilities = pd.DataFrame(one_d_volatilities, index = self.stock_names).transpose()
+            one_d_residuals = pd.DataFrame(one_d_residuals, index = self.stock_names).transpose()
+            Delta = np.diag(one_d_volatilities.iloc[0].values.ravel())
+            P = self.P_c.values
+            Sigma = Delta@P@Delta
+            R = np.linalg.cholesky(Sigma)@np.random.randn(self.returns.shape[1],1)
+            for i in range(1, horizon):
+                Q = (1-alpha-beta)*self.P_c.values\
+                    +alpha*one_d_residuals.iloc[i-1].values.reshape(-1,1)\
+                        @one_d_residuals.iloc[i-1].values.reshape(-1,1).transpose()\
+                    +beta*P
+                Delta = np.diag(one_d_volatilities.iloc[i].values.ravel())
+                P = cov_to_corr(Q)
+                Sigma = Delta@P@Delta
+                R = np.concatenate(
+                    (R, np.linalg.cholesky(Sigma)@np.random.randn(self.returns.shape[1],1)),
+                    1)
+            S = np.cumprod(1+R/100, 1)
+            portf_val = np.concatenate((
+                portf_val,np.array([(w.transpose()@s.reshape(-1,1)).tolist()[0]\
+                                    for s in S.transpose()])),1)
+        portf_val = portf_val[:,1:]
+        portf_val = pd.DataFrame(portf_val).transpose()
+        return portf_val
         
             
 class DNN(keras.Model):
