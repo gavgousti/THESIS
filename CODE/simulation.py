@@ -11,7 +11,7 @@ import time, numpy as np, matplotlib as mpl, tensorflow as tf
 from tqdm import tqdm
 from UTILS import dcc_nll,\
     take_DCC_cov, train_test_split_ts, forward_garch_multi, take_X_y,\
-        cov_to_corr, simulate_garch, create_dataset
+        cov_to_corr, simulate_garch, create_dataset, create_dataset_pct
 from scipy.optimize import minimize
 import plotly.graph_objects as go, seaborn as sns
 from plotly.offline import plot
@@ -24,26 +24,41 @@ cmap = mpl.colors.ListedColormap(plt.get_cmap('tab20')(np.linspace(0,1,20)))
 mpl.rcParams['axes.prop_cycle'] = plt.cycler('color', cmap.colors)
 
 
-path = r"C:\Users\gavgous\OneDrive - Zanders-BV\Desktop\THESIS\GITHUB\THESIS-main\DATA"
-data = pd.read_csv(path+"\\"+'Berkshire_Hathaway_Portfolio_data.csv', index_col = 'Date')
+path = r"C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Data"
+data = pd.read_csv(path+"\\"+'SMI_data.csv', 
+                   index_col = 'Date')
 data.index = pd.DatetimeIndex(data.index)
 
-dcc = CC(data, correlation_type = 'Dynamic', volatility = 'GARCH')
+train, test = train_test_split_ts(data)
+
+dcc = CC(train, correlation_type = 'Dynamic', volatility = 'GARCH')
 dcc.fit()
 
 
 
-portf_val = dcc.DCC_GARCH_simulation(simulations = 1_000)
-plt.plot(portf_val.transpose())
-plt.plot()
+portf_val = dcc.DCC_GARCH_simulation(simulations = 1_000, horizon = 1275)
+portf_val.\
+to_csv(r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Data\SimulDCCGARCH_3y_SMI.csv')
+
+# =============================================================================
+# print('\nReading Simulations...')
+# portf_val = pd.read_csv(
+#     r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Data\SimulDCCGARCH_3y.csv',
+#     index_col = ['Unnamed: 0'])
+# print('\nSimulations Read!')
+# =============================================================================
+
+# plt.plot(portf_val.transpose().values)
+# plt.plot()
 
 
 closeouts = [5, 10, 15, 25, 30, 35, 40, 45, 50, 55, 60]
 results = []
-for closeout in closeouts:
+for closeout in tqdm(closeouts):
     
-    total = create_dataset(portf_val, closeout = closeout).values.ravel()
-    
+    total = create_dataset_pct(portf_val, closeout = closeout).values.ravel()
+    # sns.histplot(total, kde = True)
+    # plt.show()
     
     ecdf = ECDF(total)
     
@@ -51,15 +66,19 @@ for closeout in closeouts:
     x = [ecdf(y_) for y_ in y]
     inverted_edf = interp1d(x, y)
     
-    epsilon = np.around(np.linspace(.0001, .1), 4)
+    epsilon = np.around(np.linspace(.0001, .05), 4)
 
-    lam = lambda x:  np.exp(inverted_edf(x))
+    # lam = lambda x:  np.exp(inverted_edf(x))
+    lam = lambda x: inverted_edf(x)/100+1
+    plt.plot(lam(epsilon))
+    plt.show()
     
     results.append(lam(epsilon).tolist())
 
 results = pd.DataFrame(results, index = closeouts, columns = epsilon)
 
 results.transpose().plot()
+plt.show()
 plt.xlabel('ε')
 plt.ylabel('λ')
 plt.title('Lending Value λ for Different Closeout Periods')
@@ -81,7 +100,21 @@ fig.update_layout(
 plot(fig)
         
 sns.heatmap(results)
-# for i in range(len(dcc.stock_names)):
-#     plt.plot(simulate_garch(dcc.garch_models[dcc.stock_names[i]].params,
-#                                       simulations = 1,
-#                                       horizon =255)['Volatilities'].values.ravel())
+plt.show()
+
+# #backtesting
+# paths_test = pd.DataFrame(
+#     np.sum(np.cumprod(1+test.pct_change().dropna().values,0),1)
+#     ).transpose()
+
+
+# v_t1 = np.cumprod(1+train.pct_change().dropna(),0).sum(1).iloc[30:].values
+# v_t = np.cumprod(1+train.pct_change().dropna(),0).sum(1).iloc[:-30]
+
+# sns.histplot(v_t1/v_t)
+
+# v_t1 = np.cumprod(1+test.pct_change().dropna(),0).sum(1).iloc[30:].values
+# v_t = np.cumprod(1+test.pct_change().dropna(),0).sum(1).iloc[:-30]
+
+# sns.histplot(v_t1/v_t)
+

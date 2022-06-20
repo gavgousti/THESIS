@@ -16,6 +16,14 @@ pi = tf.constant(math.pi)
 # =============================================================================
 # add:df.set_index(_pd.DatetimeIndex(df.index), inplace = True):line247,history
 # =============================================================================
+
+def create_dataset_pct(paths, closeout):
+    output = []
+    for t in range(0, paths.shape[1]-closeout):
+        output.append((paths.iloc[:,t+closeout]-paths.iloc[:,t])/paths.iloc[:,t])
+    output = 100*pd.DataFrame(output)
+    return output
+
 def create_dataset(paths, closeout = 10):
     '''
     Function that takes the simulated paths of the DCC and transforms it to 
@@ -37,7 +45,7 @@ def create_dataset(paths, closeout = 10):
     output = []
     paths = np.log(paths)
     for t in range(0, paths.shape[1]-closeout):
-        output.append((paths.iloc[t+closeout]-paths.iloc[t]))
+        output.append((paths.iloc[:,t+closeout]-paths.iloc[:,t]))
     return pd.DataFrame(output)
 
 
@@ -356,6 +364,7 @@ def forward_garch(rets_test, rets_train, fit):
 
     """
     mu, omega, alpha, beta = fit.params
+    print(mu, omega, alpha, beta)
     eps = rets_test-mu
     eps_0 = (rets_train[-1]-mu).numpy(); eps_0 = tf.convert_to_tensor(eps_0.reshape(-1,1), dtype = 'float32')
     eps = tf.concat((eps_0, eps[:-1,:]),0)
