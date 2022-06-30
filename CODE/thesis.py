@@ -24,6 +24,7 @@ from sklearn.metrics import mean_squared_error as mse
 import lightgbm as lgb
 from arch import arch_model
 from time import time as now
+import scipy; Phi = scipy.stats.norm.cdf
 
 mpl.rcParams['figure.figsize'] = (18,8)
 plt.style.use('ggplot')
@@ -322,7 +323,7 @@ class CC():
             self.theta = theta
             end = time.time()
             print('\n• Calculating conditional covariance matrices...')
-            self.covariances = take_DCC_cov(
+            self.covariances, self.Q_t= take_DCC_cov(
                 theta,
                 self.volatilities,
                 self.P_c,
@@ -341,17 +342,17 @@ class CC():
             print('   ➼alpha: {:1.3f} | beta: {:1.3f}\n'.\
                   format(theta[0], theta[1]))
         
-        plt.plot(self.covariances.sum(1).sum(1)[22:]**.5,
-                 label = 'Model Volatility')
-        plt.plot(self.real_covariance[41:].sum(1).sum(1)**.5,
-                 label = 'Realized Volatility')
-        plt.legend()
+        # plt.plot(self.covariances.sum(1).sum(1)[22:]**.5,
+        #          label = 'Model Volatility')
+        # plt.plot(self.real_covariance[41:].sum(1).sum(1)**.5,
+        #          label = 'Realized Volatility')
+        # plt.legend()
         self.rmse_train = mse(self.covariances.sum(1).sum(1)[22:]**.5,
                               self.real_covariance[41:].sum(1).sum(1)**.5)**.5
-        \
-    plt.title('{} CC - {} | Evaluation on Train Set (RMSE: {:3.3f})'.\
-                  format(self.type, self.vola_type, self.rmse_train))
-        plt.show()
+    #     \
+    # plt.title('{} CC - {} | Evaluation on Train Set (RMSE: {:3.3f})'.\
+    #               format(self.type, self.vola_type, self.rmse_train))
+    #     plt.show()
         
 
             
@@ -457,23 +458,23 @@ class CC():
                                              .iloc[i-22:i, :].cov().values)
         self.real_covariance_test = np.array(self.real_covariance_test)[41:]
         
-        plt.plot(self.covariances_test.sum(1).sum(1)[22:]**.5,
-                 label = 'Model Volatility')
-        plt.plot(self.real_covariance_test.sum(1).sum(1)**.5,
-                 label = 'Realized Volatility')
-        plt.legend()
+        # plt.plot(self.covariances_test.sum(1).sum(1)[22:]**.5,
+        #          label = 'Model Volatility')
+        # plt.plot(self.real_covariance_test.sum(1).sum(1)**.5,
+        #          label = 'Realized Volatility')
+        # plt.legend()
         rmse = mse(self.covariances_test.sum(1).sum(1)[22:]**.5,
                    self.real_covariance_test.sum(1).sum(1)**.5)**.5
         
-        plt.title('{} CC - {} | Evaluation on Test Set (RMSE: {:3.3f})'.\
-                      format(self.type, self.vola_type, rmse))
+        # plt.title('{} CC - {} | Evaluation on Test Set (RMSE: {:3.3f})'.\
+        #               format(self.type, self.vola_type, rmse))
 
-        plt.show()
+        # plt.show()
         return {
             'MODEL': self.type+' CC - '+self.vola_type,
-            'RMSE TRAIN SET': self.rmse_train,
+            'RMSE TRAIN SET': self.rmse_train/len(self.stock_names),
             'NLL TRAIN SET': self.nll,
-            'RMSE TEST SET': rmse,
+            'RMSE TEST SET': rmse/len(self.stock_names),
             'NLL TEST SET': nll,
             'alpha': self.theta[0],
             'beta': self.theta[1]
@@ -521,6 +522,47 @@ class CC():
         portf_val = portf_val[:,1:]
         portf_val = pd.DataFrame(portf_val).transpose()
         return portf_val
+    
+    def forecast_covariance(
+            self,
+            horizon
+            ):
+        
+        if self.vola_type == 'LSTM':
+            pred_volas = []
+            for stock in tqdm(self.stock_names):
+                pred_volas.append(self.garch_models[stock].predict_1d(self.data[[stock]]).tolist())
+                
+            
+            pred_volas = pd.DataFrame(pred_volas, index = self.stock_names).transpose()
+        elif self.vola_type == 'GARCH':
+            pred_volas = []
+            for stock in tqdm(self.stock_names):
+                pred_volas.append(
+                    (self.garch_models[stock].forecast(horizon = horizon+1, reindex = False)\
+                     .variance.values.ravel()**.5).tolist()
+                    )
+            pred_volas = pd.DataFrame(pred_volas, index = self.stock_names).transpose()
+        else:
+            print('Not Available for Given Volatility Type!')
+            return None
+        
+        
+        P_c = self.P_c.values
+        Y_t = (self.returns.iloc[-1]/self.volatilities.iloc[-1]).values.reshape(-1,1)
+        alpha, beta = self.theta
+        E_P_1 = (1-alpha-beta)*P_c+ alpha*Y_t@Y_t.transpose() + beta*self.Q_t
+        kappa = np.arange(1, horizon+1)
+        out = []
+        for k in kappa:
+            out.append(((1-(alpha+beta)**(k-1))*P_c + (alpha+beta)**(k-1)*E_P_1).tolist())
+        out = np.array(out)
+        
+        forecast_sigmas = np.array(\
+        [(np.diag(pred_volas.iloc[t].values)@out[t]@np.diag(pred_volas.iloc[t].values))\
+         .tolist() for t in range(horizon)])
+        
+        return forecast_sigmas
         
             
 class DNN(keras.Model):
@@ -668,6 +710,44 @@ class RNN(keras.Model):
         plt.legend()
         plt.title('NLL')
         plt.show() 
+    
+    def predict_1d(
+            self,
+            data,
+            horizon = 5, 
+            simulations = 100,
+            lag = 20,
+            include_rv = True
+            ):
+        
+        rets = 100*data.pct_change().dropna()
+
+        X_train, y_train = take_X_y(rets,
+                                    lag,
+                                    reshape = False,
+                                    take_rv = include_rv,
+                                    log_rv =include_rv)
+        X_train, y_train = tf.convert_to_tensor(X_train, dtype  = 'float32'),\
+                        tf.convert_to_tensor(y_train, dtype  = 'float32') 
+
+        vola_paths = []
+        for _ in tqdm(range(simulations)):
+            X = X_train[-1:]
+            vola_path = [self(X)[0][0].numpy()]
+            
+            for _ in range(horizon):
+                r = np.random.randn()*vola_path[-1]
+                rets = np.concatenate((X[-1][1:,0].numpy(),[r]))
+                lrv = np.log(np.std(rets))
+                log_r_volas = np.concatenate((X[-1][1:,1].numpy(),[lrv]))
+                X = tf.convert_to_tensor(
+                    np.expand_dims(
+                        np.concatenate((rets.reshape(-1,1), log_r_volas.reshape(-1,1)),1),0
+                        )
+                    )
+                vola_path.append(self(X)[0][0].numpy())
+            vola_paths.append(vola_path)
+        return pd.DataFrame(vola_paths).mean(0).values
 
 def deployment_RNN_1d(
         lstm = False,
@@ -1186,4 +1266,78 @@ def output1(output_file =  r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Fi
         .set_index('Index')
 
     return nll_table, rmse_table
+
+
+
+def breach_probability(
+        dcc,
+        weight = 'Uniform',
+        start = 0,
+        end = -1,
+        plot__ = True,
+        liab_ratio = .9):
+    '''
+    Breach Probability for a Collateral that follows a DCC process.
+
+    Parameters
+    ----------
+    dcc :thesis.CC
+        Fitted model of the returns.
+    weight : str or np.array, optional
+        Weight of the portfolio. If not Uniform then 
+        array of shape (d,1). The default is 'Uniform'.
+    start : int, optional
+        Negative integer. How many days before last available date to start 
+        analysis. The default is 0.
+    end : int, optional
+        Negative integer. How many days before last available date to finish
+        the analysis. The default is -1.
+    plot__ : bool, optional
+        Decide if you need the output plotted or not. The default is True.
+    liab_ratio : float, optional
+        Lending value of the loan. The default is .9.
+
+    Returns
+    -------
+    output : pd.DataFrame
+        A time series with the collateral value, the credit limit and the 
+        breach probability.
+
+    '''
+    if type(weight) == str:
+        if weight == 'Uniform':
+            w = dcc.data.shape[1]**(-1)*np.ones(dcc.data.shape[1]).reshape(-1,1) 
+    else:
+        w = weight.copy()
+    e = np.ones_like(w)
+    portf_val = pd.DataFrame([(w.T@dcc.data.iloc[i])[0] for i\
+                              in range(dcc.data.shape[0])],
+                             index = dcc.data.index,
+                             columns = ['Portfolio Value'])
+    
+        
+    time_ = dcc.data.index[-dcc.covariances.shape[0]:]
+    counter = 0
+    prob = []; L =[]
+    for t in time_[start:-1]:
+        l = liab_ratio*portf_val.loc[t].values[0]
+    
+        L.append(l)
+        S = np.diag(dcc.data.loc[t])
+    
+        var = 1e-4*w.T@S@dcc.covariances[counter+1]@S@w
+        prob.append(Phi((1*l-(1*w.T@S@e)[0,0])/var[0,0]))
+        counter+=1
+    
+    output = pd.DataFrame([portf_val.iloc[-len(L):].values.ravel(), L, prob],
+                 columns = portf_val.index[-len(L):],
+                 index = ['Collateral Value',
+                          'Credit Limit',
+                          'Breach Probability']).transpose().dropna()
+    
+    if plot__:
+        fig, axs = plt.subplots(2,1,sharex = True, tight_layout = True)
+        output.iloc[start:end, :2].plot(ax = axs[0])
+        output.iloc[start:end,2:].plot(ax = axs[1])
+    return output
 

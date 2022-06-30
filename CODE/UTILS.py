@@ -281,7 +281,7 @@ def take_DCC_cov(
         Sigma_t = np.diag(sigma_.ravel())@P_t@np.diag(sigma_.ravel())
                 
         cov[t, :, :] = Sigma_t
-    return cov
+    return cov, Q_t
 
 def dcc_nll(
         theta,

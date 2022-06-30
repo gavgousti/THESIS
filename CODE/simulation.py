@@ -4,6 +4,11 @@ Created on Thu Jun 16 14:51:19 2022
 
 @author: Giorgio
 """
+
+# =============================================================================
+# SCRIPT FOR THE LL APPLICATION IN 6.3
+# =============================================================================
+
 from thesis import CC, DNN, RNN
 from sklearn.metrics import mean_squared_error as mse
 import pandas as pd, seaborn as sns, matplotlib.pyplot as plt
@@ -24,29 +29,39 @@ cmap = mpl.colors.ListedColormap(plt.get_cmap('tab20')(np.linspace(0,1,20)))
 mpl.rcParams['axes.prop_cycle'] = plt.cycler('color', cmap.colors)
 
 
-path = r"C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Data"
+path = r"C:\Users\gavgous\OneDrive - Zanders-BV\Desktop\THESIS\GITHUB\THESIS-main\DATA"
 data = pd.read_csv(path+"\\"+'SMI_data.csv', 
-                   index_col = 'Date')
+                    index_col = 'Date')
 data.index = pd.DatetimeIndex(data.index)
+data/=data.iloc[0]
+
+fig, axs = plt.subplots(1,2)
+data.plot(ax = axs[0])
+sns.heatmap(data.pct_change().dropna().corr(), ax = axs[1], cmap='viridis')
+plt.show()
 
 train, test = train_test_split_ts(data)
 
 dcc = CC(train, correlation_type = 'Dynamic', volatility = 'GARCH')
 dcc.fit()
+# dcc.visualize_loss_fn()
+
+
+portf_val = dcc.DCC_GARCH_simulation(simulations = 1_000, horizon = 255)
+portf_val.to_csv(path+'\\SimulDCCGARCH_3y_P1.csv')
+plt.plot(portf_val.transpose())
+plt.show()
 
 
 
-portf_val = dcc.DCC_GARCH_simulation(simulations = 1_000, horizon = 1275)
-portf_val.\
-to_csv(r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Data\SimulDCCGARCH_3y_SMI.csv')
 
-# =============================================================================
+
+
 # print('\nReading Simulations...')
 # portf_val = pd.read_csv(
-#     r'C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Data\SimulDCCGARCH_3y.csv',
+#     path+'\\SimulDCCGARCH_3y.csv',
 #     index_col = ['Unnamed: 0'])
 # print('\nSimulations Read!')
-# =============================================================================
 
 # plt.plot(portf_val.transpose().values)
 # plt.plot()
@@ -113,8 +128,8 @@ plt.show()
 
 # sns.histplot(v_t1/v_t)
 
-# v_t1 = np.cumprod(1+test.pct_change().dropna(),0).sum(1).iloc[30:].values
-# v_t = np.cumprod(1+test.pct_change().dropna(),0).sum(1).iloc[:-30]
+# v_t1 = np.cumprod(1+test.pct_change().dropna(),0).sum(1).iloc[10:].values
+# v_t = np.cumprod(1+test.pct_change().dropna(),0).sum(1).iloc[:-10]
 
 # sns.histplot(v_t1/v_t)
 
