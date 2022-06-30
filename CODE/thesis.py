@@ -486,7 +486,7 @@ class CC():
         horizon = 255
         ):
     
-        w = np.ones((len(self.stock_names),1))
+        w = 1/len(self.stock_names)*np.ones((len(self.stock_names),1))
         alpha, beta = self.theta
         portf_val = len(self.stock_names)*np.ones((horizon,1))
         for _ in tqdm(range(simulations)):
@@ -1339,5 +1339,6 @@ def breach_probability(
         fig, axs = plt.subplots(2,1,sharex = True, tight_layout = True)
         output.iloc[start:end, :2].plot(ax = axs[0])
         output.iloc[start:end,2:].plot(ax = axs[1])
+        plt.show()
     return output
 
