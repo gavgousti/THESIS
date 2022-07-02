@@ -23,11 +23,12 @@ cmap = mpl.colors.ListedColormap(plt.get_cmap('tab20')(np.linspace(0,1,20)))
 mpl.rcParams['axes.prop_cycle'] = plt.cycler('color', cmap.colors)
 
 
-path = r"C:\Users\Giorgio\Desktop\Master\THESIS CODES ETC\Data"
+path = \
+r"C:\Users\gavgous\OneDrive - Zanders-BV\Desktop\THESIS\GITHUB\THESIS-main\DATA"
 data = pd.read_csv(path+"\\"+'87_ll_portf.csv', index_col = 'Date')
 # data.index = pd.DatetimeIndex(data.index)
 
-data = data/data.iloc[0]
+# data = data/data.iloc[0]
 data.plot()
 plt.show()
 
