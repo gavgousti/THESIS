@@ -14,6 +14,7 @@
 \usepackage{amsmath}
 \setcounter{secnumdepth}{3}
 \usepackage{biblatex}
+\usepackage{subfig}
 \usepackage{graphics}
 \usepackage{diagbox}
 \usepackage{lmodern}
@@ -31,11 +32,12 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % DOCUMENT METADATA
 
-\thesistype{Master Thesis\\ MSc Quantitative Finance ETH/UZH} % Master's Thesis, Bachelor's Thesis, Semester Thesis, Group Project
+\thesistype{Master Thesis\\ MSc Quantitative Finance UZH ETH} % Master's Thesis, Bachelor's Thesis, Semester Thesis, Group Project
 \title{Comparison of Statistical and Machine Learning Methods in Modelling Time-Varying Volatility 
 }
 
-\author{Georgios Avgoustinos}
+\author{Georgios Avgoustinos\\20-743-654}
+\email{20-743-654}
 \email{georgios.avgoustinos@uzh.ch}
 
 \institute{Department of Banking and Finance\\
@@ -45,7 +47,7 @@ University of Zurich}
 %\logo{\includegraphics[width=0.2\columnwidth]{figures/disco_logo_faded}}
 
 \supervisors{Prof. Dr. Erich Walter Farkas\\
- Zaid Siddiqi (\textit{Zanders Treasury \& Risk})}
+ Zaid Siddiqi (\textit{Zanders Treasury and Risk})}
 
 % Optionally, keywords and categories of the work can be shown (on the Abstract page)
 %\keywords{Keywords go here.}
@@ -78,13 +80,11 @@ University of Zurich}
 
 % Start writing here
 \chapter{Introduction}
-\todo[]{all $t=1, 2, \dots$ to be changed with $t\in\mathbb{N}$}
-\todo[]{every equation numbered}
+
 
 \chapter{Literature Overview of Statistical Volatility Models}
 
 \section{One Dimensional Models}\label{one_d}
-\todo[]{More details in the specification of Garch, Egarch, GJR. Some remarks and probably unconditional variance or forecasting close form.}
 Standard methods for a statistical modelling of financial returns include linear regression or Auto-regressive Moving Averages (ARMA)  models. Though, their main assumption is the existence of homoskedasticity on the residuals meaning a constant volatility throughout time, which do not seem to agree with the empirical findings. For instance, the authors in \cite{QRM} observe some stylized facts in financial returns and among others, they highlight that:
 \begin{itemize}
     \item Return series are not iid although they show little serial correlation.
@@ -219,7 +219,7 @@ To deal with it, the most widely used assumption from the researchers is that a 
 
 To what follows, we will focus on the \textit{Conditional Correlation} multivariate GARCH models which stand as a simplified extension of the one-dimensional GARCH models to multiple dimensions. The specific models are also seemingly efficient during estimation especially when the number of assets is large.
 
-In more detail, assuming that a portfolio is consisted of $d$ assets, we can again work in a probability triplet $(\Omega, \mathcal{F}, \mathbb{P})$ and denote the assets' returns as a $d$-valued stochastic process $\mathbf{X} = (\mathbf{X}_t)_{t\in\mathbb{N}}$ and the filtration generated from them as $\mathbb{F} = (\mathcal{F})_{t\in\mathbb{N}}$. Then $\bf{X}$ is stated to follow a \textit{Conditional Correlation}-Garch process with Gaussian innovations if it is of the following form.
+In more detail, assuming that a portfolio is consisted of $d$ assets, we can again work in a probability triplet $(\Omega, \mathcal{F}, \mathbb{P})$ and denote the assets' returns as a $\mathbb{R}^d$-valued stochastic process $\mathbf{X} = (\mathbf{X}_t)_{t\in\mathbb{N}}$ and the filtration generated from them as $\mathbb{F} = (\mathcal{F})_{t\in\mathbb{N}}$. Then $\bf{X}$ is stated to follow a \textit{Conditional Correlation}-Garch process with Gaussian innovations if it is of the following form.
 
 \begin{gather}
     \mathbf{X}_t|\mathcal{F}_{t-1}\sim\mathcal{N}(0, \Sigma_t)\label{eq: mgarch1}\\
@@ -236,7 +236,7 @@ for $t\in \mathbb{N}$ and a measurable function $f$ that maps to the measurable 
 The \textit{Constant Conditional Correlation} (CCC) model was introduced by \cite{CCC} and stands as a first main attempt for modelling portfolio returns in multiple dimensions.
 
 \begin{definition}[CCC-GARCH]
-The $d$-valued stochastic process $(\mathbf{X}_t)_{t\in\mathbb{N}}$ is a CCC-GARCH process if (i) it follows the form stated in the equations \ref{eq: mgarch1}-\ref{eq: mgarch2} and (ii) $P_t = P_c$, for $t\in \mathbb{N}$, where $P_c\in\mathbb{R}^{d\times d}$ is constant correlation matrix. 
+The $\mathbb{R}^d$-valued stochastic process $(\mathbf{X}_t)_{t\in\mathbb{N}}$ is a CCC-GARCH process if (i) it follows the form stated in the equations \ref{eq: mgarch1}-\ref{eq: mgarch2} and (ii) $P_t = P_c$, for $t\in \mathbb{N}$, where $P_c\in\mathbb{R}^{d\times d}$ is constant correlation matrix. 
 \end{definition}
 
   \begin{mdframed}\begin{remark}
@@ -262,11 +262,11 @@ The estimation of the model is rather simple as well and it can be performed in 
 \textit{Dynamic Conditional Correlation} (DCC) model was introduced by \cite{DCC} and stands as a more realistic extension of CCC as the correlation matrix evolves recursively. 
 
 For a mathematical definition of the model, it is important to define a function $\mathfrak{P}: \mathbb{R}^{d\times d}\mapsto\mathbb{R}^{d\times d}$ that maps covariance matrices to correlation matrices as follows:
-\begin{equation}
+\begin{equation}\label{cor_fun}
     M \longmapsto\mathfrak{P}(M) = \text{diag}\left(\frac{1}{M_{1,1}}, \dots, \frac{1}{M_{d,d}}\right)M  \text{diag}\left(\frac{1}{M_{1,1}}, \dots, \frac{1}{M_{d,d}}\right)
 \end{equation}
-\begin{definition}[DCC-GARCH]
-The $d$-valued stochastic process $(\mathbf{X}_t)_{t\in\mathbb{N}}$ is a DCC-GARCH process if:
+\begin{definition}[DCC-GARCH]\label{dcc}
+The $\mathbb{R}^d$-valued stochastic process $(\mathbf{X}_t)_{t\in\mathbb{N}}$ is a DCC-GARCH process if:
 \begin{enumerate}
     \item  It follows the form stated in the equations \ref{eq: mgarch1}-\ref{eq: mgarch2}
     \item $P_t = \mathfrak{P}(Q_t) \text{, }\forall t\in\mathbb{N}$, with 
@@ -276,7 +276,7 @@ The $d$-valued stochastic process $(\mathbf{X}_t)_{t\in\mathbb{N}}$ is a DCC-GAR
     \end{gather}
 \end{enumerate}
 \end{definition}
-  \begin{mdframed}\begin{remark}
+  \begin{mdframed}\begin{remark}\label{alpha_beta}
 Note that the matrices $(Q_t)_{t\in\mathbb{N}}$ are well defined positive definite covariance matrices iff $\sum_{i=1}^p \alpha_i + \sum_{j=1}^q \beta_j<1$. In more detail,  $\forall \mathbf{x}\neq\mathbf{0}\in\mathbb{R}^d$ one has:
 \scriptsize
 \[\mathbf{x}^\intercal Q_t\mathbf{x} = \left(1-\sum_{i=1}^p \alpha_i - \sum_{j=1}^q \beta_j\right)\mathbf{x}^\intercal P_c\mathbf{x}+\sum_{i=1}^p\alpha_i\mathbf{x}^\intercal\mathbf{Y}_{t-i}\mathbf{Y}_{t-i}^\intercal\mathbf{x} + \sum_{j=1}^q\beta_j \mathbf{x}^\intercal P_{t-j}\mathbf{x}>0\]\[\Longleftrightarrow\]\[\sum_{i=1}^p \alpha_i + \sum_{j=1}^q \beta_j<1\]
@@ -285,7 +285,7 @@ Note that the matrices $(Q_t)_{t\in\mathbb{N}}$ are well defined positive defini
 
 Regarding the fitting of DCC model in data, maximum likelihood methods is widely used. Although, someone can directly estimate all of the parameters in one step via MLE, the most common approach is the estimation in two steps, one for the individual volatilities and one for the estimation of the conditional correlations. 
 
-  \begin{mdframed}\begin{remark}
+  \begin{mdframed}\begin{remark}\label{fitting CC}
 For the determination of the objective function for optimization, recall that the negative log-likelihood for Gaussian residuals in a dataset $\mathbf{x} = (\mathbf{x}_t)_{t=1}^T$ is been given from:
 \[l_{\mathbf{X}}(\mathbf{x}) = \frac{1}{2}\sum_{t-1}^T d\log2\pi+\log|\Sigma_t|+\mathbf{x}_t^\intercal\Sigma_t^{-1}\mathbf{x}_t\]
 and according to the assumptions of the model, one has
@@ -311,9 +311,6 @@ Summarizing all of the above, the estimation of the model can be described in wh
 \end{algorithmic}
 \end{algorithm}
 
-  \begin{mdframed}\begin{remark}
-\todo[]{methods for solving the optimization problem}
-\end{remark}\end{mdframed}  
 
 \chapter{Machine Learning Models in Scope}
 
@@ -495,13 +492,12 @@ The focus on a distributional approach for our modelling leads us to select MLE 
     l(\mathbf{r}, \hat{\boldsymbol{\sigma}}) = \\\frac{1}{2}\left(n\log(2\pi)+\sum_{t=1}^n \log(\hat{\sigma}_t^2)+\frac{r_t^2}{\hat{\sigma}_t^2}\right)
 \end{equation}
 With $\hat{\mathbf{\sigma}}\in \mathbb{R}^T$ we denote the estimated conditional volatility.
-\todo[]{why this choice? Cite papers with similar choice}
 
  \begin{mdframed}\begin{remark}
 The specific loss function in \ref{eq:loss1d} will be used for both model fitting and performance measurement reasons throughout the chapter. 
 \end{remark}\end{mdframed}       
-\section{Data Handling \& Model Specification}
-\subsection{Data-set Construction}
+\section{Data Handling \& Model Specification}\label{1d_meth}
+\subsection{Data-set Construction}\label{dataContr}
 We start with a data set containing the daily spot prices of an asset, denoted by $\mathbf{S} = (S_0, S_1, \dots, S_T)^\intercal$ and then we define the daily percentage returns as:
 \begin{equation}
     \tilde{r}_{t} = 100\frac{S_{t}-S_{t-1}}{S_{t-1}} \text{,  for } t = 1, \dots, T 
@@ -560,8 +556,17 @@ An important hyperparameter of the models is $\lambda$ which determines the \tex
 
 The dataset is consisted of daily returns from 8 famous stock indices covering a time period of approximately 20 years. For a detailed statistical analysis of the data, the reader is referred to \ref{ssec:1d_data} in the Appendix. After a grid search for the lag hyperparameter $\lambda$, we adjust it to 20 in order to balance the computational efficiency and the performance of every model. 
 
-Additionally, for every index the dataset is partitioned into two subsets, namely the \textit{train set} (containing 70\% of the initial dataset) and the \textit{test set} (containing 30\% of the initial dataset). The \textit{train set} is used for parameter estimation or model fitting and the \textit{test set} for performance comparison and evaluation purposes respectively.\todo[]{create remark describing the traintest split} 
+Additionally, for every index the dataset is partitioned into two subsets, namely the \textit{train set} (containing 70\% of the initial dataset) and the \textit{test set} (containing 30\% of the initial dataset). The \textit{train set} is used for parameter estimation or model fitting and the \textit{test set} for performance comparison and evaluation purposes respectively. 
 
+\begin{mdframed}
+\begin{remark}[Train-Test Split]\label{ttsplit}
+Due to the inserted lags from the realized volatility (22) and the explanatory variables (20), it is worth specifying in detail how the split in a training and evaluating set takes place.
+
+Suppose, the data of the available returns are indexed from a set of dates $I = [t_1, t_2, \dots,t_N]$. We chose to use the 70\% of the data to train our models and therefore, we can define a \textit{split date} from the index $i^*\coloneqq\lfloor{.7\times N}\rfloor$. Consequently, the \textit{train set} and \textit{test set} are indexed from the sets of dates $I_\text{train}$ and $I_\text{test}$ respectively, where:
+\[I_\text{train} = [t_{43}, \dots, t_{i^*}]\]
+\[I_\text{test} = [t_{i^*+43}, \dots, t_{N}]\]
+\end{remark}
+\end{mdframed}
 \subsection{Definition of the Models}
 As baseline statistical models, we select the models GARCH, EGARCH and GJR described in Section \ref{one_d}. In more detail, we estimate the model parameters of the statistical models in the \textit{train set} of every index. The detailed model estimation of these 24 models in total can be reviewed in the Figures \ref{first_8} and \ref{second_8} in the Appendix. 
 
@@ -631,13 +636,11 @@ Consequently, we decide to compare the estimated conditional volatility from the
 \end{equation}
 where, $N_{test}$ denotes the cardinality of the \textit{test set} and $\|\cdot\|$ the Euclidean Norm on $\mathbb{R}^{N_{test}}$.
 
-The specific evaluation selection (given the validity of the \textit{realized volatility} as an index that captures the market's characteristics correctly) captures the model risk of our methodology. Meaning that there is irreducible error due to the Gaussian assumption of the returns and the general modelling approach.
-
 The results of the second comparison can be visualized in Table \ref{RMSE_1d}.
 \begin{table}[!ht]
     \centering
     \scriptsize
-    \begin{tabular}{|l||l|l|l|l|l|l|l|l|}
+    \begin{tabular}{|p{2.7cm}||p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|}
     \hline
          \backslashbox{MODEL}{INDEX}& GSPC & DJI & IXIC & RUT & SSMI & OEX & N225 & FTSE \\ \hline\hline
         RNN & 2125 & 2089 & 2532 & 2701 & 2035 & 2166 & 2525 & 2164 \\ \hline
@@ -656,7 +659,7 @@ The results of the second comparison can be visualized in Table \ref{RMSE_1d}.
 \begin{table}[!ht]
     \centering
     \scriptsize
-    \begin{tabular}{|l||l|l|l|l|l|l|l|l|}
+    \begin{tabular}{|p{2.7cm}||p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|}
     \hline
          \backslashbox{MODEL}{INDEX}& GSPC & DJI & IXIC & RUT & SSMI & OEX & N225 & FTSE \\ \hline\hline
         RNN & 0.471 & 0.422 & 0.721 & 0.579 & 0.356 & 0.425 & 0.390 & 0.364 \\ \hline
@@ -672,88 +675,454 @@ The results of the second comparison can be visualized in Table \ref{RMSE_1d}.
         \label{RMSE_1d}
 \end{table}
 
+Admittedly, the running times for the training of the models can be found in Table \ref{running_times}. Note that the models where trained in a laptop equipped with  an Intel Core i7-1165G7 (12MB Cache, up to 4.7GHz) processor.
+
+\begin{table}[H]
+    \scriptsize
+    \centering
+    \begin{tabular}{|p{2.7cm}||p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|p{.7cm}|}
+    \hline
+        \backslashbox{MODEL}{INDEX} & GSPC & DJI & IXIC & RUT & SSMI & OEX & N225 & FTSE \\ \hline\hline
+        RNN & 1.974 & 1.730 & 1.904 & 1.749 & 1.880 & 1.895 & 1.900 & 2.269 \\ \hline
+        LSTM & 5.685 & 5.750 & 5.850 & 6.170 & 6.159 & 6.379 & 6.005 & 6.470 \\ \hline
+        FNN & 0.840 & 0.852 & 0.938 & 0.906 & 0.925 & 1.020 & 0.850 & 0.870 \\ \hline
+        GB & 0.060 & 0.047 & 0.070 & 0.056 & 0.075 & 0.060 & 0.097 & 0.036 \\ \hline
+        GARCH & 0.040 & 0.018 & 0.029 & 0.020 & 0.025 & 0.025 & 0.032 & 0.020 \\ \hline
+        GJR & 0.034 & 0.034 & 0.035 & 0.030 & 0.032 & 0.045 & 0.032 & 0.032 \\ \hline
+        EGARCH & 0.040 & 0.035 & 0.049 & 0.048 & 0.035 & 0.050 & 0.035 & 0.040 \\ \hline
+    \end{tabular}
+    \normalsize
+    \caption{Running Times}
+    \label{running_times}
+\end{table}
+
 \subsection{Comments on the Results}
 
 As can be concluded, regarding the loss comparison the ML models stand out with a marginal difference for most of the indices. From the other hand, when we compare the output with the realized volatility, the statistical GARCH and GJR outperform the ML models.
 
 The main reasoning behind it, is that due to the significantly increased number of the ML models' parameters, the variance of the estimators increases. 
 
+In more detail, even though the $RV$ as defined is a quite smooth function (especially for a 22 days rolling window), the output of the ML models is not. The loss function $l$ defined in \ref{eq:loss1d} inherits all of the noise of the data-set and that leads to estimators for the trainable parameters which may minimize better the objective function, but produce additional noise in the estimator. 
+
+Regarding an inside comparison of the ML models, as expected from previous studies, the ability of the LSTM layers to differentiate which past information is more beneficial to keep, renders the LSTM model the best ML model.
+
+Last but not least, it is worth mentioning that specific evaluation selection based on the $RMSE$ (given the validity of the \textit{realized volatility} as an index that captures the market's characteristics correctly) captures the model risk of our methodology. Meaning that there is irreducible error due to the Gaussian assumption of the returns and the general modelling approach.
+
+
+
 
 
 \chapter{Estimation of Models for Multi-Dimensional Returns}
 
+At the specific chapter we try to expand the ideas on modelling time varying volatility, in a multidimensional environment. By combining Conditional Correlation models with ML and statistical models for one dimensional time series, we perform similar work with Chapter 4, with the difference that the conditional volatility is replaced by conditional covariance matrix.
 
-\section{Introduction to Lombard Lending}
+To what follows, we will introduce the reader with the main modeling approach and assumptions, discuss about the specification of a suitable loss function and derive the results for comparison.
+
+
+\section{Model Assumptions}
+
+Similarly with the one dimensional case, the distributional approach remains. The main goal is to model a portfolio of assets, by assuming that its returns are conditionally Normal distributed around zero.
+
+\begin{assumption}
+Working in a probability space $(\Omega, \mathcal{F}, \mathbb{P})$, we denote a portfolio's returns consisted of $d$ assets by $R = (\mathbf{R_1}, \dots, \mathbf{R_T})$ and the filtration generated from them by $\mathbb{F} = (\mathcal{F}_t)_{t=0}^T$ (where $\mathcal{F}_0$ is chosen to be the trivial $\sigma$-algebra). Therefore, we assume that the portfolio returns obey the follow distributional dynamics:
+
+\begin{equation}\label{dynamics_md}
+\left.
+    \begin{matrix}
+        \mathbf{R}_t|\mathcal{F}_{t-1} \sim \mathcal{N}\left(\mathbf{0}, \Sigma_t\right)\\ 
+        \Sigma_t = \Delta_t P_t \Delta_t \\
+        P_t = \mathfrak{P}\left( \left(1-\alpha -  \beta \right)P_c+\alpha\mathbf{Y}_{t-1}\mathbf{Y}_{t-1}^\intercal + \beta P_{t-1}\right) \\ 
+        \mathbf{Y}_t = \Delta_t^{-1}\mathbf{R}_t\\
+        P_c = \frac{1}{T}\sum_{t=1}^T \mathbf{Y}_t\mathbf{Y}_t^\intercal\\
+        \Delta_t = \text{diag}(\sigma_{t,1}, \dots, \sigma_{t,d}) \\ 
+        \sigma_{t,j} = f_j(\mathcal{F}_{t-1})\text{     , for $j = 1, \dots, d$}
+    \end{matrix}       \right\} \text{     , for $t=1, \dots, T$ }
+\end{equation}
+\end{assumption}
+
+The model definition is inspired from the definition of the DCC models in Definition \ref{dcc} the only difference is that now the functions $f_j$ are generic measurable functions and not necessarily the GARCH conditional volatility functions. For recapitulation reasons, $\mathfrak{P}$ is the correlation function that maps covariance matrices to correlation matrices defined in \ref{cor_fun}, $\mathbf{Y}_t$ and $P_c$ denote the devolatized returns and the constant correlation matrix respectively. Last but not least, for the additional trainable parameters we have \[(\alpha, \beta)\in (0,1)\times (0,1)\text{     s.t. } \alpha+\beta<1.\]
+
+Similarly with the one dimensional case, $\mathbf{0}$-centered returns are assumed. The reasoning behind is that, it is again a very popular assumption when modelling daily portfolio returns and the research focuses mainly in the volatility estimation rather than the mean of the portfolio.
+
+The main idea behind the modelling approach is to work with hybrid models for the portfolios. In more detail, we estimate the individual conditional volatilities for each asset in the portfolio via a model described in Chapter 4 and then we further assume the Conditional Correlation dynamics for the dependence structure of the portfolio to find the parameters $(\alpha, \beta)$ that further minimize our loss function.
+
+\section{Specification of the Loss Function}
+Similarly with the previous chapter, the distributional approach motivates us to use MLE methods for the estimation of the models. Therefore, we can switch and minimize the negative log likelihood instead. Inspired by the way the statistical conditional correlation models are estimated (described in Remark \ref{fitting CC}) we proceed as follows. We denote the estimated correlation matrices by $\mathbf{\widehat{P}} = \left(\widehat{P}_t\right)_{t=1}^T$ and the targeted devolatized returns by $\mathbf{Y} = \left(\mathbf{Y}_t\right)_{t=1}^T$ for $t = 1, \dots, T$ we define the loss function $L:\mathbb{R}^{T\times d\times d}\times \mathbb{R}^{T\times d}\mapsto \mathbb{R}$ as:
+\begin{equation}\label{md_loss}
+    \left(\mathbf{\widehat{P}}, \mathbf{Y}\right)\longmapsto L\left(\mathbf{\widehat{P}}, \mathbf{Y}\right) \coloneqq \frac{1}{2}\sum_{t=1}^T \log \left|\widehat{P}_t\right| + \mathbf{Y}_t^\intercal \widehat{P}_t^{-1} \mathbf{Y}_t
+\end{equation}
+
 \section{Data Handling \& Model Fitting}
+
+For the comparison purposes we chose to construct 3 portfolios of 19 stocks, each one equally weighted. In more detail, we constructed the portfolios with stocks listed on the famous Berkshire Hathaway portfolio (BH), Financial Times Stock Exchange 100 (FTSE) and Swiss Market Index (SMI). Figures for describing the consistency of these portfolios and the time horizon can be found in Subsection \ref{Multi_data} of the Appendix.  
+
+The estimated models are characterized by two components. Firstly, it is the individual volatility structure that is assumed to rule every different asset listed in the portfolio. Secondly, the correlation structure of the portfolios throughout time which is uniquely determined from the parameters $(\alpha, \beta)$ of the Conditional Correlation model.
+
+Therefore, the estimation of this models takes part in two stages. First, for every individual asset we fit the one-dimensional volatility models (3 Statistical and 3 ML) according to the methodology rigorously described in Section \ref{1d_meth}. Afterwards, after obtaining the individual estimated conditional volatilities, we are further optimizing the DCC parameters in order to minimize the negative log likelihood of the data. In more detail, we proceed with the following optimization problem
+\begin{equation}
+    (\alpha^*, \beta^*)\coloneqq \underset{\underset{\text{s.t. } \alpha+\beta<1}{(\alpha, \beta)\in (0,1)^2}}{\text{argmin   }} L\left(\mathbf{\hat{P}}(\alpha, \beta), \mathbf{Y}\right)
+\end{equation}
+ where the loss function $L\left(\cdot, \cdot\right)$ is given in \ref{md_loss} and the structure of the 3 dimensional $\mathbf{\hat{P}}(\alpha, \beta)$ for the conditional correlation of every step, is described in the dynamics of \ref{dynamics_md}. The optimization is been with the Sequential Least Squares Programming (SLSQP) algorithm.
+ 
+ For illustrative purposes, the reader may refer to the Additional Figures section of the Appendix for an illustration of such a loss surface in Figure \ref{dcc_surf}. Recall that the linear constraint for $\alpha$ and $\beta$ is there to assure the well-posedness of the covariance matrices (see Remark \ref{alpha_beta}).
+
 \section{Results \& Comparison}
-\begin{table}[!ht]
+\subsection{Performance Evaluation}
+For the evaluation stage, we choose to split the available datasets to train and test according to the methodology described in Remark \ref{ttsplit}. Therefore, to what follows we are estimating the model based on the available data of the train set and evaluate its performance on the data of the test set.
+
+In parallel to the one-dimensional comparison, we would like to additionally evaluate the performance of the models in a model-free setup except from the Negative-Log-Likelihood comparison. In that regard, we will compare the RMSE of the estimated conditional volatility from the models in scope with what we define as \textit{Realized Portfolio Volatility}. 
+
+\begin{definition}(\textit{Realized Portfolio Volatility} (RPV))
+Assume an equally weighted  portfolio consisted of $d$ different assets . We denote with $r^j_t$ for $t = 1, \dots, T$ and $j = 1,\dots, d$ the percentage return of asset $j$ at time $t$. Then we define the RPV as follows:
+\begin{equation}
+    RPV_t = \frac{1}{d}\sqrt{\mathbf{e_d}^\intercal \left(\frac{\sum_{i=t-21}^t \mathbf{r}_{i}\mathbf{r}_{i}^\intercal}{22}\right)\mathbf{e_d}} \text{, for } t = 22,\dots, T
+\end{equation}
+where we denote with $\mathbf{r_i}\coloneqq(r_i^1, \dots, r_i^d)^\intercal$ and $\mathbf{e_d} \coloneqq (1, \dots, 1)^\intercal \in \mathbb{R}^d$.
+\end{definition}
+
+Recall that the models now output an estimation of the conditional covariance matrix for each time step $\widehat{\Sigma}_t$. Therefore we can - under the 1 share position for every asset assumption - denote the \textit{Model Portfolio Volatility} (MPV) as: 
+\begin{equation}
+    \mathbf{MPV} = \frac{1}{d} \left(\sqrt{\mathbf{e_d}^\intercal \widehat{\Sigma}_{22} \mathbf{e_d}}, \dots, \sqrt{\mathbf{e_d}^\intercal \widehat{\Sigma}_T \mathbf{e_d}}\right)^\intercal
+\end{equation}  
+Finally, we can now have an additional performance measurement in set - as an extension of the Realized Volatility handling of the One-Dimensional case - calculated from the the Root-Mean-Square-Error
+\begin{equation}
+    RMSE\left(\mathbf{MPV}_{\text{set}}, \mathbf{RPV}_\text{set}\right) =  \left\|\frac{\mathbf{MPV}_{\text{set}}-\mathbf{RPV}_\text{set}}{\sqrt{N_{set}-22}}\right\|_2 
+\end{equation}.
+
+To what follows, the comparison results for both approaches are illustrated in the following Tables \ref{tbl_md_1}, \ref{tbl_md_2}, \ref{tbl_md_3}.
+
+\subsection{Comments on the Results}
+\begin{table}[!ht]\label{tbl_md_1}
     \scriptsize
     \centering
-    \begin{tabular}{|p{3.5cm}||p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}|}
+    \begin{tabular}{|p{3.5cm}||p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}||p{1.1cm}|p{1.1cm}|}
     \hline
-         & RMSE TRAIN SET & NLL TRAIN SET & RMSE TEST SET & NLL TEST SET & alpha & beta \\ \hline \hline
-        Dynamic CC - GARCH & 2.74 & 8983 & 5.09 & -426 & 0.11 & 0.88 \\ \hline
-        Constant CC - GARCH & 4.68 & 22860 & 8.12 & 3651 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - EGARCH & 2.90 & 8628 & 5.82 & 2562 & 0.11 & 0.89 \\ \hline
-        Constant CC - EGARCH & 4.62 & 22647 & 8.66 & 6569 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - GJR & 2.76 & 8832 & 5.25 & -663 & 0.11 & 0.89 \\ \hline
-        Constant CC - GJR & 4.59 & 22783 & 8.15 & 3462 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - GB & 3.05 & 5439 & 9.88 & -2039 & 0.13 & 0.86 \\ \hline
-        Constant CC - GB & 4.84 & 21332 & 11.77 & 2133 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - FNN & 4.52 & 11774 & 11.90 & 634 & 0.11 & 0.87 \\ \hline
-        Constant CC - FNN & 5.61 & 23644 & 13.57 & 2517 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - LSTM & 3.37 & 7329 & 7.04 & -1128 & 0.11 & 0.88 \\ \hline
-        Constant CC - LSTM & 4.92 & 22256 & 8.91 & 3220 & 0.00 & 0.00 \\ \hline
+     & RMSE TRAIN SET & NLL TRAIN SET & RMSE TEST SET & NLL TEST SET & alpha & beta \\ \hline\hline
+        Dynamic CC - GARCH & 0.152 & 8983 & 0.283 & -426 & 0.108 & 0.883 \\ \hline
+        Constant CC - GARCH & 0.260 & 22860 & 0.451 & 3651 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - EGARCH & 0.189 & 9666 & 0.375 & 4025 & 0.146 & 0.786 \\ \hline
+        Constant CC - EGARCH & 0.257 & 22647 & 0.481 & 6569 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - GJR & 0.153 & 8832 & 0.292 & -663 & 0.106 & 0.886 \\ \hline
+        Constant CC - GJR & 0.255 & 22783 & 0.453 & 3462 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - GB & 0.235 & 8096 & 0.609 & 991 & 0.185 & 0.498 \\ \hline
+        Constant CC - GB & 0.269 & 21332 & 0.654 & 2133 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - FNN & 0.242 & 9335 & 0.687 & -546 & 0.122 & 0.861 \\ \hline
+        Constant CC - FNN & 0.316 & 23353 & 0.741 & 239 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - LSTM & 0.227 & 9276 & 0.440 & 1070 & 0.173 & 0.692 \\ \hline
+        Constant CC - LSTM & 0.271 & 22268 & 0.484 & 3265 & 0.000 & 0.000 \\ \hline
     \end{tabular}
-    \normalsize
-    \caption{BH portfolio}
+            \normalsize
+
 \end{table}
 
-\begin{table}[!ht]
+\begin{table}[!ht]\label{tbl_md_2}
     \centering
     \scriptsize
-    \begin{tabular}{|p{3.5cm}||p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}|}
+    \begin{tabular}{|p{3.5cm}||p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}||p{1.1cm}|p{1.1cm}|}
     \hline
-         & RMSE TRAIN SET & NLL TRAIN SET & RMSE TEST SET & NLL TEST SET & alpha & beta \\ \hline
-        Dynamic CC - GARCH & 3.82 & 11602 & 10.75 & 1514 & 0.10 & 0.89 \\ \hline
-        Constant CC - GARCH & 5.28 & 20316 & 12.75 & 3903& 0.00 & 0.00 \\ \hline
-        Dynamic CC - EGARCH & 4.60 & 12238 & 12.50 & 3628 & 0.14 & 0.78 \\ \hline
-        Constant CC - EGARCH & 5.40 & 20235 & 13.91 & 4984 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - GJR & 4.69 & 12174 & 12.56 & 2625 & 0.15 & 0.74 \\ \hline
-        Constant CC - GJR & 5.30 & 20237 & 13.45 & 3883& 0.00 & 0.00 \\ \hline
-        Dynamic CC - GB & 4.39 & 7565 & 17.62 & -455 & 0.15 & 0.84 \\ \hline
-        Constant CC - GB & 5.76 & 18829 & 18.58 & 2257 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - FNN & 5.21 & 11613 & 17.98 & 2222 & 0.18 & 0.72 \\ \hline
-        Constant CC - FNN & 5.74 & 20821 & 18.91 & 3116 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - LSTM & 4.85 & 10500 & 13.46 & 1852 & 0.15 & 0.80 \\ \hline
-        Constant CC - LSTM & 5.59 & 19812 & 14.77 & 3549 & 0.00 & 0.00 \\ \hline
+      & RMSE TRAIN SET & NLL TRAIN SET & RMSE TEST SET & NLL TEST SET & alpha & beta \\ \hline\hline
+        Dynamic CC - GARCH & 0.211 & 11694 & 0.578 & 1867 & 0.114 & 0.862 \\ \hline
+        Constant CC - GARCH & 0.278 & 20316 & 0.671 & 3903 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - EGARCH & 0.212 & 11697 & 0.623 & 2753 & 0.104 & 0.884 \\ \hline
+        Constant CC - EGARCH & 0.284 & 20235 & 0.732 & 4984 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - GJR & 0.209 & 11352 & 0.620 & 1443 & 0.106 & 0.883 \\ \hline
+        Constant CC - GJR & 0.279 & 20237 & 0.708 & 3883 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - GB & 0.231 & 7565 & 0.927 & -455 & 0.147 & 0.837 \\ \hline
+        Constant CC - GB & 0.303 & 18829 & 0.978 & 2257 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - FNN & 0.301 & 13854 & 0.886 & 3067 & 0.132 & 0.832 \\ \hline
+        Constant CC - FNN & 0.306 & 20845 & 0.975 & 3146 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - LSTM & 0.272 & 10777 & 0.746 & 2059 & 0.180 & 0.696 \\ \hline
+        Constant CC - LSTM & 0.295 & 19848 & 0.787 & 3527 & 0.000 & 0.000 \\ \hline
     \end{tabular}
-    \normalsize
-    \caption{FTSE}
 \end{table}
 
-\begin{table}[!ht]
+\begin{table}[!ht]\label{tbl_md_3}
     \centering
     \scriptsize
-    \begin{tabular}{|p{3.5cm}||p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}|}
+    \begin{tabular}{|p{3.5cm}||p{1.1cm}|p{1.1cm}|p{1.1cm}|p{1.1cm}||p{1.1cm}|p{1.1cm}|}
     \hline
-         & RMSE TRAIN SET & NLL TRAIN SET & RMSE TEST SET & NLL TEST SET & alpha & beta \\ \hline
-        Dynamic CC - GARCH & 3.88 & 4375 & 5.04 & -4603 & 0.12 & 0.87 \\ \hline
-        Constant CC - GARCH & 5.73 & 19927 & 6.83 & 11 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - EGARCH & 4.60 & 5300 & 7.05 & -738 & 0.13 & 0.83 \\ \hline
-        Constant CC - EGARCH & 5.91 & 19947 & 8.17 & 2630 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - GJR & 4.09 & 4659 & 6.01 & -4613 & 0.12 & 0.87 \\ \hline
-        Constant CC - GJR & 5.69 & 20040 & 7.31 & -4 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - GB & 4.58 & 1628 & 7.96 & -5598 & 0.14 & 0.85 \\ \hline
-        Constant CC - GB & 6.26 & 18624 & 9.35 & -780 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - FNN & 5.31 & 5108 & 9.39 & -4316 & 0.13 & 0.86 \\ \hline
-        Constant CC - FNN & 6.78 & 20493 & 10.31 & -160 & 0.00 & 0.00 \\ \hline
-        Dynamic CC - LSTM & 4.75 & 3900 & 6.91 & -4791 & 0.12 & 0.87 \\ \hline
-        Constant CC - LSTM & 6.18 & 19784 & 8.13 & -73 & 0.00 & 0.00 \\ \hline
+         & RMSE TRAIN SET & NLL TRAIN SET & RMSE TEST SET & NLL TEST SET & alpha & beta \\ \hline\hline
+        Dynamic CC - GARCH & 0.204 & 4375 & 0.266 & -4603 & 0.117 & 0.875 \\ \hline
+        Constant CC - GARCH & 0.301 & 19927 & 0.359 & 11 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - EGARCH & 0.225 & 4720 & 0.352 & -1804 & 0.115 & 0.876 \\ \hline
+        Constant CC - EGARCH & 0.311 & 19947 & 0.430 & 2630 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - GJR & 0.247 & 6015 & 0.349 & -2696 & 0.143 & 0.787 \\ \hline
+        Constant CC - GJR & 0.299 & 20040 & 0.385 & -4 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - GB & 0.283 & 3501 & 0.452 & -3518 & 0.215 & 0.657 \\ \hline
+        Constant CC - GB & 0.330 & 18624 & 0.492 & -780 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - FNN & 0.280 & 5288 & 0.491 & -4006 & 0.133 & 0.850 \\ \hline
+        Constant CC - FNN & 0.361 & 20064 & 0.561 & -460 & 0.000 & 0.000 \\ \hline
+        Dynamic CC - LSTM & 0.302 & 6256 & 0.423 & -2207 & 0.188 & 0.639 \\ \hline
+        Constant CC - LSTM & 0.327 & 19727 & 0.434 & -116 & 0.000 & 0.000 \\ \hline
     \end{tabular}
-    \normalsize
-    \caption{SMI}
 \end{table}
+
+\chapter{Lombard Lending Applications}\label{Lombard}
+
+To designate the importance of an accurate market volatility estimation, we will provide some applications of the already covered material in the framework of Lombard Lending.
+
+Therefore, in the last chapter of this dissertation, we will introduce the reader to the general concept of a Lombard loan and with the toolkit already developed in the previous chapters, we will develop two modelling approaches for real world applications in the field.
+
+\section{Definition of Lombard Loans}
+
+Lombard Lending specifically in Switzerland stands as a typical definition for security-backed lending. In more detail, the obligor gets access to funding, by providing a collateral which has a dynamic market value and can be traded in a liquid environment. Typical examples of such collateral may include portfolios of stocks, bonds, funds, structured products, etc. As an aftermath the lender gets exposure to market risk from the fluctuations of the collateral backing the exposure. 
+
+The credit limit up to which the borrower can withdraw capital is variable and characterized as a percentage of the running collateral's value named \textit{lending value}. In the case of a default from the counterparty, the institution is agreed to have the option to liquidate the assets in order to recover the losses.
+
+The event when the running collateral's value drops below the running liabilities amount is called \textit{breach}. Even though the lender can liquidate the securities after a \textit{breach} occurs, in practice she does not. Instead, she follows a control policy named \textit{margin call} during which she asks the borrower to either (i) reduce her exposure or to (ii) provide additional collateral during a period of specified number of days called \textit{closeout period}.
+
+As an aftermath, the emerging market risk from the collateral's fluctuations obliges the institution to have the necessary quantitative tools not only to price such a loan, but also to monitor it during its lifespan and have early warning estimates for potential margin calls. During the following subsections \ref{signal} and \ref{lendingValue} we will provide simplified application regarding both of these operations.
+
+
+\section{Risk Signal Application}\label{signal}
+
+For the scope of this application we would like to construct a monitoring tool during the life of the loan. In more detail, at every timestep given the available market history we calculate the conditional probability of having a \textit{breach}, named \textit{breach probability}. In what follows we will use the the methodology described in Chapter 5 for the dynamics of the portfolio returns and more specifically focus on the best statistical and ML models, the DCC-GARCH and DCC-LSTM respectively.
+
+ Additionally, given the estimated model at every time we will provide a method for forecasting the covariance matrix for a short future time horizon in order to estimate the forecasted \textit{breach probabilities}.
+
+To start with a mathematical modelling of the problem we denote with $T$ the maturity of the loan and we work on a discretized time grid (of days) $t = 0, \dots, T$. We also work on the probability space $(\Omega, \mathcal{F}, \mathbb{P})$ and assume that the collateral portfolio is consisted of $d$ assets of which the percentage returns are denoted by the $\mathbb{R}^d$-valued stochastic process $\mathbf{R} = (\mathbf{R}_t)_{t = 0, \dots, T}$ which is assumed to obey the distributional dynamics stated in \ref{dynamics_md}. Moreover, we augment $\mathcal{F}$ with the filtration $\mathbb{F}=(\mathcal{F}_t)_{t = 0, \dots, T}$ generated from $\mathbf{R}$. The value of the portfolio is denoted by the $\mathbb{R}_+$-valued $\mathbb{F}$-adapted stochastic process $V = (V_t)_{t=0, \dots, T}$ which is dependent on the portfolios weight $\mathbf{w}\in \mathbb{R}^d$ and the $\mathbb{R}^d$-valued $\mathbb{F}$-adapted stochastic process $\mathbf{S} = (\mathbf{S}_t)_{t=0, \dots, T}$ of the assets' prices. Last but not least, we notate the liabilities amount of the obligor by the $\mathbb{R}_+$-valued $\mathbb{F}$-predictable stochastic process $L = (L_t)_{t=0, \dots, T}$.
+
+\begin{mdframed}
+\begin{remark}
+Note here that $\mathcal{F}_0$ is not necessarily the trivial sigma algebra as the assets of the portfolio may have existed before the inception of the loan ($t=0$), therefore $\mathcal{F}_0$ inherits all the realized information from the past. In order not to use negative indexing for the time, we stick with this notation. 
+\end{remark}
+\end{mdframed}
+
+\begin{mdframed}
+\begin{remark}\label{weights}
+We chose to assume the portfolio weights $\mathbf{w}$ to be constant, but without any change in the rest of our methodology, someone could model the portfolio weights with a $\mathbb{F}$-predictable $\mathbb{R}^d$-valued stochastic process $(\mathbf{w}_t)_{t = 0, \dots, T}$. That can be especially useful for portfolio optimization or hedging applications.
+\end{remark}
+\end{mdframed}
+
+\subsection{Breach Probability Calculation}
+Collecting all of the above definitions and assumptions, we can denote the \textit{breach probability} at time $t$ by ${BP}_t$ for $t = 0, \dots, T-1$ and to what follows one has.
+\begin{equation}\label{BP}
+    \begin{split}
+{BP}_{t} = \mathbb{P}\left(V_{t+1}<L_{t+1}|\mathcal{F}_t\right) = \mathbb{P}\left(\mathbf{w}^\intercal \mathbf{S}_{t+1}<L_{t+1}|\mathcal{F}_t \right)\\
+=\mathbb{P}\left(\mathbf{w}^\intercal\left[\mathbf{S}_t \odot\left(\mathbf{e_d}+\mathbf{R}_{t+1}\right)\right]<L_{t+1}|\mathcal{F}_t\right)  \\
+=\mathbb{P}\left(\mathbf{w}^\intercal D^\mathbf{S}_t\left(\mathbf{e_d}+\mathbf{R}_{t+1}\right)<L_{t+1}| \mathcal{F}_t\right)\\
+=\mathbb{P}\left(\mathbf{w}^\intercal\left( D^\mathbf{S}_t\mathbf{e_d}\right)+\mathbf{w}^\intercal D^\mathbf{S}_t\Sigma_{t+1} (D^\mathbf{S}_t)^\intercal \mathbf{w} Z<L_{t+1}| \mathcal{F}_t\right)\\
+=\Phi\left(\frac{L_{t+1}-\mathbf{w}^\intercal D^\mathbf{S}_t\mathbf{e_d}}{\mathbf{w}^\intercal D^\mathbf{S}_t\Sigma_{t+1} (D^\mathbf{S}_t)^\intercal \mathbf{w}}\right)
+    \end{split}
+\end{equation}
+
+Where, 
+\begin{itemize}
+    \item $\odot$ denotes the elementwise multiplication.
+    \item $\mathbf{e_d} = (1, \dots, 1)^\intercal\in\mathbb{R}^d$.
+    \item $D^\mathbf{S}_t = \text{diag}\left(\mathbf{S}_t^1, \dots, \mathbf{S}_t^d\right)$ for $t = 0, \dots, T-1$
+    \item $Z\sim\mathcal{N}(0,1)$.
+    \item $\Phi(\cdot)$ the c.d.f. of the standard normal distribution.
+\end{itemize}
+
+We implemented the proposed methodology for a collateral portfolio of a private bank, which can be briefly illustrated in Figure \ref{ll_portf}. Because we would like to demonstrate the outputed \textit{breach probabilities} we specifically chose to fit the DCC models up to a stressed day for the market and the loan 11/02/20. Moreover, we assumed that the running exposure is 90\% of the previous day collateral's value. The time series of the collateral's value together with the exposure and the outputted in sample \textit{breach probability} can be found in Figure  \ref{fig:bp}.
+
+
+\begin{figure}[h]
+    \centering
+    \subfloat[\centering GARCH]{{\includegraphics[width=6cm]{figures/garch_bp_insample.png} }}
+    \qquad
+    \subfloat[\centering LSTM]{{\includegraphics[width=6cm]{figures/lstm_bp_insample.png} }}
+    \caption{Comparison of the Outputted BPs in Sample}
+    \label{fig:bp}
+\end{figure}
+
+\begin{mdframed}
+\begin{remark}(Bonus Material)
+A careful asset manager in the bank, given the \textit{breach probability} formula that we derived can work even further to minimize the risk of potential exposures. As we mentioned in Remark \ref{weights} we can model the portfolio weights not to be constant meaning that we can assume that trading is allowed during the lifespan of the loan (which is what happens most of the times in real world). Hence, she can try to minimize the \textit{breach probability} by recalibrating the portfolio at every time step. To put things mathematically the problem that she is asked to solve is an optimization one given by:
+\[\mathbf{w}^*_t\coloneqq\underset{\mathbf{w}_t\in\mathfrak{W}}{\arg\min\text{  }}BP_t(\mathbf{w}_t)\]
+where, $\mathfrak{W}$ is a specified subspace of $\mathbb{R}^d$.
+
+Then, by exploiting the monotonicity of $\Phi(\cdot)$ and the positive definiteness of $\Sigma_{t+1}$ the optimization problem blows up to:
+\[\mathbf{w}^*_t\coloneqq\underset{\mathbf{w}_t\in\mathfrak{W}}{\arg\min\text{  }}\frac{L_{t+1}-\mathbf{w}^\intercal D^\mathbf{S}_t\mathbf{e_d}}{\mathbf{w}^\intercal D^\mathbf{S}_t\Sigma_{t+1} (D^\mathbf{S}_t)^\intercal \mathbf{w}}\]
+
+which is equivalent to:
+\[\mathbf{w}^*_t\coloneqq\underset{\mathbf{w}_t\in\mathfrak{W}}{\arg\max\text{  }}\frac{\mathbf{w}^\intercal D^\mathbf{S}_t\mathbf{e_d}}{\mathbf{w}^\intercal D^\mathbf{S}_t\Sigma_{t+1} (D^\mathbf{S}_t)^\intercal \mathbf{w}}+\lambda \left(\mathbf{w}^\intercal D^\mathbf{S}_t\Sigma_{t+1} (D^\mathbf{S}_t)^\intercal \mathbf{w}\right)\]
+
+Intuitively, the optimization problem is analogous to maximizing the Sharpe Ration of the portfolio with constraints on its variance in order to be above a specific threshold dependent on $\lambda = 1/L_{t+1}\in \mathbb{R}$.
+\end{remark}
+\end{mdframed}
+\subsection{Forecasted Breach Probability
+}
+
+In order to provide estimates for the forecasted \textit{breach probability}, we should first focus on the forecast of a DCC model.
+
+According to \cite{DCC_Forecast}, the multi-step ahead forecasting of a DCC model takes place in two stages. At first, the individual forecasted volatilities of each asset need to me calculated and then the forecasted corellation matrices which will result to the forecasted covariance matrices. 
+
+\subsubsection{Multi-Step Ahead Forecast of GARCH(1,1)}\label{garchFor}
+By exploiting the simple recursive relationship for the conditional volatility as described in \ref{thm:garch_def} (for $p=q=1$), we have that for $l=2,3, \dots$
+\begin{equation}
+\begin{split}
+    h_t^2(l)\coloneqq\mathbb{E}[\sigma^2_{t+l}|\mathcal{F}_t]=\omega+(\alpha+\beta)h_t(l-1)\\
+    =\frac{\omega[1-(\alpha+\beta)^{l-1}]}{1-\alpha-\beta}+(\alpha+\beta)^{l-1}\sigma^2_{t+1}
+\end{split}
+\end{equation}
+\subsubsection{Multi-Step Ahead Forecast of LSTM}\label{lstmFor}
+In that case, the complicated structure of a LSTM layer as described in \ref{lstm} does not allow us to find a similar simple solution like in the GARCH(1,1) case. Hence, we can calculate the forecasted conditional probability by bootstraping. The detailed process can be described in the following algorithm.
+\begin{algorithm}[H]
+\caption{Bootstraping Conditional Volatility}
+\begin{algorithmic}
+\State{
+\begin{enumerate}
+    \item Specify \# of simulated paths $M$ and forecast horizon $H$.
+    \item For $i = 1, \dots, M$:
+    \begin{enumerate}
+        \item $h_t^i(1)\gets\hat{\sigma}^{\text{LSTM}}(\mathbf{x}_t|\boldsymbol{\theta}^*)$ ($\mathbf{x}_t$ the vector as described in \ref{dataContr})
+        \item For $l=1, \dots, H$:
+        \begin{enumerate}
+            \item Sample $\varepsilon\sim\mathcal{N}(0,1)$
+            \item $r_{t+l}^i\gets h_t^i(l)\varepsilon$
+            \item $h_t^i(l+1)\gets \hat{\sigma}^{\text{LSTM}}(\mathbf{x}_{t+l}^i|\boldsymbol{\theta}^*)$
+        \end{enumerate}
+    \end{enumerate}
+    \item Estimate $h_t(l) = \frac{1}{M}\sum_{i=1}^M h_t^i(l)$ for $l=1, \dots, H$
+\end{enumerate}
+}
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Multi-Step Ahead Forecast of DCC}\label{dccFor}
+
+As mentioned, in order to forecast the DCC-GARCH/LSTM model for a future horizon of $H$ (days), first we have to forecast the conditional corellation matrices and afterwards from the individual forecasted volatilities we can obtain the forecasted conditional covariance matrices.
+
+For the conditional correlation matrix forecast two methods were proposed in \cite{DCC_Forecast}, but we pick specifically the one of them as empirical analysis in the specific paper show that is has better bias properties for almost every correlation matrix.
+
+To do that, the main assumption used is
+
+ \[\mathbb{E}[P_{t+i}|\mathcal{F}_t]=\mathbb{E}[Q_{t+i}|\mathcal{F}_t] \text{ ,for all } i=1, \dots, H\]. Therefore one has,
+\begin{equation}
+    \hat{P}_t(1)\coloneqq\mathbb{E}[P_{t+1}|\mathcal{F}_{t}]\approx\mathbb{E}[Q_{t+1}|\mathcal{F}_t]=(1-\alpha-\beta)P_c+\alpha Y_t Y_t^\intercal+\beta Q_t
+\end{equation}
+and for $l = 1, \dots, H$
+\begin{equation}
+    \begin{split}
+        \hat{P}_t(l)\coloneqq\mathbb{E}[P_{t+k}|\mathcal{F}_t]\approx\mathbb{E}[Q_{t+k}|\mathcal{F}_t]\approx (1-\alpha-\beta)P_c+(\alpha+\beta)\hat{P}_t(l-1)\\\approx  \dots \\ \approx (1-(\alpha+\beta)^{k-1})P_c+(\alpha+\beta)^{k-1}\hat{P}_t(1)
+    \end{split}
+\end{equation}
+Now for the forecasted conditional correlation matrices $\hat{\Sigma}_t(l)\coloneqq\mathbb{E}[\Sigma_{t+l}|\mathcal{F}_{t}]$ one has
+\begin{equation}
+    \hat{\Sigma}_t(l) = \hat{\Delta}_t(l)\hat{P}_t(l)\hat{\Delta}_t(l)\text{ , for } l = 1, \dots, H
+\end{equation}
+where, $\hat{\Delta}_t(l)\coloneqq\text{diag}(h^1_t(l),\dots, h^d_t(l))\in\mathbb{R}^{d\times d}$
+
+\bigskip\bigskip
+To what follows now, after the described forecasting methodologies in \ref{garchFor}, \ref{lstmFor} and \ref{dccFor}, we are able to proceed with the calculation of the forecasted breach probability. For that, due to the fact that during the whole modelling the change in level of returns is considered insignificant ($\mathbb{E}[\mathbf{R}_{t+1}|\mathcal{F}_t]=0$) and also we focus in forecasting horizons of relative small size ($H\leq 5$) we make the assumption that
+\[\mathbf{S}_{t+l}|\mathcal{F}_t \overset{d}{=}\mathbf{S}_t\odot\left(\mathbf{e_d}+\mathbf{R}_{t+l}|\mathcal{F}_t\right) \text{ , for } l=2,\dots, H\]
+admittedly, we assume that the liabilities amount remains the same during the forecasting horizon
+\[L_{t+l} = L_{t+1}\text{ , for } l=2,\dots, H\]. Consequently, we can now forecast the $l$-step ahead \textit{breach probability} similar to \ref{BP} as follows
+\begin{equation}
+    \begin{split}
+        \widehat{BP}_t(l) = \mathbb{P}(V_{t+l}< L_{t+l}|\mathcal{F}_t) = \mathbb{P}\left(\mathbf{w}^\intercal\mathbf{S}_{t+l}< L_{t+1}|\mathcal{F}_t\right) \\
+        = \mathbb{P}(\mathbf{w}^\intercal[\mathbf{S}_t\odot(\mathbf{e_d}+\mathbf{R}_{t+l})]< L_{t+1}|\mathcal{F}_t)\\
+        = \mathbb{P}\left(\mathbf{w}^\intercal \left[ D_t^\mathbf{S}(\mathbf{e_d}+\mathbf{R}_{t+l})\right]<L_{t+1}|\mathcal{F}_t\right)\\
+        =\mathbb{P}\left(\mathbf{w}^\intercal\left( D^\mathbf{S}_t\mathbf{e_d}\right)+\mathbf{w}^\intercal D^\mathbf{S}_t\hat{\Sigma}_{t}(l) (D^\mathbf{S}_t)^\intercal \mathbf{w} Z<L_{t+1}| \mathcal{F}_t\right)\\
+=\Phi\left(\frac{L_{t+1}-\mathbf{w}^\intercal D^\mathbf{S}_t\mathbf{e_d}}{\mathbf{w}^\intercal D^\mathbf{S}_t\hat{\Sigma}_{t}(l) (D^\mathbf{S}_t)^\intercal \mathbf{w}}\right)
+    \end{split}
+\end{equation}
+
+We therefore, forecast the \textit{breach probability} on 11/03/2020 for a horizon of 5 days. The outputted forecasts can be found in Figure \ref{fig:fbp}.
+
+One can notice that the DCC-LSTM model tends to estimate higher conditional volatilities compared to the DCC-GARCH, which results to higher \textit{breach probabilities}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = 12cm]{figures/fbp.png}
+    \caption{Comparison of the Forecasted BP}
+    \label{fig:fbp}
+\end{figure}
+
+\section{Lending Value Application}\label{lendingValue}
+
+The estimation of the \textit{lending value} is a very important operation for the pricing of a Lombard loan. The literature research on contrary to the mathematical elegance of such an application is rather poor. Though, the paper \cite{juri} describes a rigorous mathematical modelling of such a loan and derives closed form estimations of the \textit{lending value} with and without liquidity constraints. On the other hand, the modelling is restricted only to one-dimensional collateral with their stochastic dynamics described by Geometric Brownian Motion, assumptions which are quite strong. 
+
+During the specific subsection, we aim to develop a method for the estimation of the \textit{lending value} for portfolios of collateral with stochastic dynamics from the DCC model. Furthermore, we assume that trading is not allowed during the life of the portfolio and therefore its weights remain constant until maturity.
+
+For the shake of economy, we use the same notation as in \ref{signal} with the difference that now the liabilities amount is not abstractly determined but instead is given from
+\begin{equation}
+    L_{t+1} \coloneqq \lambda V_t \text{ , for } t=0, \dots, T-1
+\end{equation}
+where with $\lambda$ we denote the \textit{lending value}.
+
+Hence, the bank needs to cover potential exposures in the case where the the borrower does not react to the margin calls. By, denoting the \textit{closeout period} with $
+\delta$, the bank can estimate the \textit{lending value} by trying to keep the probability "that the collateral's value after the \textit{closeout period} has dropped below the outstanding amount" low. By assuming that the outstanding amount during the \textit{closeout period} remains the same as it was at the margin call's timestep one requires that for a small $\epsilon\in(0,1)$
+\begin{equation}
+    \mathbb{P}(V_{t+\delta}<\lambda V_t)<\epsilon\text{ , for }t = 1, \dots, T-\delta
+\end{equation}
+
+The problem that occurs here, is that on contrary to the the application in \ref{signal} the stated probabilities are unconditional. More specifically, the DCC model does not have always a stationary distribution and it does only under specific cases with complex solutions \cite{dccStationarity}. 
+
+To deal with that issue, we propose the following methodology based on Monte-Carlo simulations described in detail in Algorithm \ref{alg:lamdaEst}.
+
+
+\begin{algorithm} [h]
+\caption{Estimation of $\lambda$}
+\label{alg:lamdaEst}
+\begin{algorithmic}
+\State{ \textbf{Input:} Portfolio of $d$ assets with the dataset of historical prices $\mathcal{S} = (\mathbf{S}_\tau)_{\tau = 1}^{t_0}$ and the portfolio weights $\mathbf{w}\in\mathbb{R}^d$. \\\hrulefill\smallskip
+\begin{enumerate}
+\item Specify forecasting horizon $H$ and \# of simulations $M$.
+\item Fit a DCC model on the historical portfolio returns.
+\item Simulate $M$ paths from the fitted DCC model for the $d$-dimensional returns and the future horizon $H$.
+\[\mathcal{R}^i = \left[\mathbf{R}^{i}_{t_1},\dots, \mathbf{R}^{i}_{t_H}\right]\text{ , for }i=1, \dots, M\]
+\[\mathbf{R}^{i}_{t_h} = (r^{i,1}_{t_h}, \dots, r^{i,d}_{t_h})^\intercal\in\mathbb{R}^d\text{ , for } i=1, \dots, M\text{ and } h = 1, \dots, H\]
+\item Calculate the portfolio value paths.
+\[\mathbf{V}^i = \left(V^i_{t_1}, \dots, V^i_{t_H}\right)^\intercal\in \mathbb{R}_+^H\text{ , for }i=1, \dots, M\]
+\[V^i_{t_h} = \mathbf{w}^\intercal \left(\mathbf{S}_{t_0}\odot \left[\underset{k=1}{\overset{h}{\odot}}\left(\mathbf{e_d}+\mathbf{R}^i_{t_k}
+\right)\right]\right)\text{ , for } i=1, \dots, M\text{ and } h = 1, \dots, H\]
+\item Select a closeout period $\delta$.
+\item Create a dataset $\mathcal{P}\coloneqq\left(p^i_{t_{l+\delta}}\right)_{l=0}^{H-\delta}$ where 
+\[p^i_{t_{l+\delta}}\coloneqq\frac{V^i_{t_{l+\delta}}-V^i_{t_l}}{V^i_{t_l}}\text{ , for } i=1, \dots, M \text{ and } l=0, \dots, H-\delta\]
+\item Estimate the empirical distribution funciton (e.d.f.) $\hat{F}(\cdot)$ of all the data in $\mathcal{P}$.
+\item Estimate the inverse of e.d.f $\hat{F}^{-1}(\cdot)$ from linear interpolation.
+\end{enumerate}
+}
+\hrulefill\smallskip
+\State {Now, one has,
+\[\epsilon>\mathbb{P}\left(V_{t+\delta}<\lambda V_t\right) =  \mathbb{P}\left(\frac{V_{t+\delta}-V_t}{V_t}<\lambda-1\right)\approx\hat{F}(\lambda-1)\]
+\[\Leftrightarrow \]
+\[\lambda<\hat{F}^{-1}(\epsilon)+1\]
+}
+\hrulefill\smallskip
+\State {\textbf{Output:} Estimate $\lambda$ via its derived upper bound $\hat{F}^{-1}(\epsilon)+1$.}
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width = 13cm]{figures/ll_lines_garch.png}
+    \caption{\textit{Lending Value} $\lambda$ from the DCC-GARCH Model}
+    \label{fig:garch_lines}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width = 13cm]{figures/ll_lines_lstm.png}
+    \caption{\textit{Lending Value} $\lambda$ from the DCC-LSTM Model}
+    \label{fig:lstm_lines}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \subfloat[\centering GARCH]{{\includegraphics[width=6cm]{figures/garch_ll.png} }}
+    \qquad
+    \subfloat[\centering LSTM]{{\includegraphics[width=6cm]{figures/lstm_ll.png} }}
+    \caption{\textit{Lending Value} $\lambda$ Surface}
+    \label{fig:surface_LL}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width = 12cm]{figures/QQ_simuls.png}
+    \caption{Quantiles Comparison}
+    \label{QQ_simuls}
+\end{figure}
+
+We apply the proposed algorithm in the full dataset \ref{ll_portf} of the portfolio used for the application in \ref{signal}. Regarding the simulation, we picked a forecasting horizon $H=255$ for a total of $M = 10^4$ number of paths. The estimated \textit{lending values} for different values of $\epsilon$ and \textit{closeout periods} can be illustrated in Figures \ref{fig:garch_lines} and \ref{fig:lstm_lines}. Moreover, by interpolating we can visualize the \textit{lending value surfaces} in Figure \ref{fig:surface_LL}.
+
+We can notice that, the estimated \textit{lending value} from the DCC-LSTM model is more conservative, as the LSTM models tend to estimate higher conditional volatilities than the GARCH ones. Moreover, it is clear that the cost of lending increase as the \textit{closeout period} increases.
+
+Last but not least, we evaluate the "reliability" of the simulations by comparing the quantiles of the initial dataset with the ones simulated from the DCC-GARCH and DCC-LSTM respectively. The comparison can be found in the QQ-plot of Figure \ref{QQ_simuls}. Due to the very volatile market period in which we examined the portfolio, both of the simulations underestimate the tails of the returns' distribution. Although, the DCC-LSTM seems to be way more accurate. The similarity between the DCC-LSTM simulation can be furtherly illustrated in the kernel density estimations in Figure \ref{fig:kde} from the Appendix.
 %--------------------------------------------------------
 \chapter{Appendix}
 \section{Data}
@@ -1540,7 +1909,74 @@ Regarding the stationarity of the returns we performed the Augmented-Dickey Full
     \caption{ Q-Q Plots of the Residuals}
     \label{fig:my_label}
 \end{figure}
+\subsection{Multi-Dimensional Data}\label{Multi_data}
 
+Figures \ref{HB_P}, \ref{FTSE_P} and \ref{SMI_P} illustrate the historical prices of every portfolio of the multivariate analysis together with the Linear Correlation Matrix of their percentage returns.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = 13cm]{figures/HB_data.png}
+    \caption{BH Portfolio}
+    \label{HB_P}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = 13cm]{figures/FTSE_data.png}
+    \caption{FTSE Portfolio}
+    \label{FTSE_P}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = 13cm]{figures/smi_data.png}
+    \caption{SMI Portfolio}
+    \label{SMI_P}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = 10cm]{figures/HB_vola.png}
+    \caption{Volatility Comparison | HB Portfolio}
+    \label{fig:my_label}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = 10cm]{figures/FTSE_vola.png}
+    \caption{Volatility Comparison | FTSE Portfolio}
+    \label{fig:my_label}
+\end{figure}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = 10cm]{figures/SMI_vola.png}
+    \caption{Volatility Comparison | SMI Portfolio}
+    \label{fig:my_label}
+\end{figure}
+
+\section{Additional Figures}
+
+\subsection{Loss Surface of the DCC model}
+Figure \ref{dcc_surf} illustrates the loss function surface of the DCC-GARCH model for the SMI portfolio. The convexity of the surface is clearly visualized as well as the non well-posed issues that appear when the constraint that $\alpha+\beta<1$ is violated.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = 12cm]{figures/dcc_loss.png}
+    \caption{Loss Surface of the DCC Model}
+    \label{dcc_surf}
+\end{figure}
+
+\subsection{Additional Figures from Chapter \ref{Lombard}}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = 13cm]{figures/ll_portf.png}
+    \caption{Lombard Porfolio}
+    \label{ll_portf}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width = 13cm]{figures/kde.png}
+    \caption{KDE of the Simulations}
+    \label{fig:kde}
+\end{figure}
 %---------------------------------------------------------------
 
 \printbibliography
